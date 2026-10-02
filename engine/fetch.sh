@@ -7,7 +7,8 @@
 #   fetch.sh --recipe-dir DIR --board BOARD --spotter-lock FILE --out DIR [--no-image]
 #
 # Writes OUT/base.img.xz (unless --no-image), and OUT/inputs/: each input by its name, and
-# frc-coprocessor-agent.deb. Needs curl, sha256sum, and yq (mikefarah's, version 4).
+# frc-coprocessor-agent.deb. Needs curl, sha256sum, and python3, which reads the locks (JSON): it
+# runs on the recipe's runner, which may have no yq.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -26,7 +27,6 @@ while (($#)); do
     *) die "unknown option: $1" ;;
   esac
 done
-require_yq
 load_recipe "$recipe_dir"
 load_board "$board"
 lock=$RECIPE_DIR/$RECIPE_LOCK
@@ -34,6 +34,17 @@ lock=$RECIPE_DIR/$RECIPE_LOCK
 [[ -f $spotter_lock ]] || die "no Spotter lock at '$spotter_lock'"
 [[ -n $out ]] || die "--out is required"
 mkdir -p "$out/inputs"
+
+# A value from a JSON lock, by its path's names (a missing one is empty).
+json_get() {
+  python3 - "$@" <<'PY'
+import json, sys
+value = json.load(open(sys.argv[1]))
+for name in sys.argv[2:]:
+    value = value.get(name, {}) if isinstance(value, dict) else {}
+print(value if isinstance(value, str) else "")
+PY
+}
 
 # Downloads a URL to a file and checks it, or fails saying which.
 fetch() {
@@ -55,18 +66,17 @@ fetch() {
 }
 
 if [[ $image == yes ]]; then
-  url=$(BOARD=$board lock_get '.images[strenv(BOARD)].url' "$lock")
-  sum=$(BOARD=$board lock_get '.images[strenv(BOARD)].sha256' "$lock")
-  fetch "$board's base image" "$url" "$sum" "$out/base.img.xz"
+  fetch "$board's base image" "$(json_get "$lock" images "$board" url)" \
+    "$(json_get "$lock" images "$board" sha256)" "$out/base.img.xz"
 fi
 for input in $RECIPE_INPUTS; do
   name=${input%%=*}
-  path=${input#*=}
-  fetch "$name" "$(lock_get "$path.url" "$lock")" "$(lock_get "$path.sha256" "$lock")" \
+  IFS=. read -r -a path <<<"${input#*=.}"
+  fetch "$name" "$(json_get "$lock" "${path[@]}" url)" "$(json_get "$lock" "${path[@]}" sha256)" \
     "$out/inputs/$name"
 done
-url=$(ARCH=$RECIPE_ARCH lock_get '.debs[strenv(ARCH)].url' "$spotter_lock")
-sum=$(ARCH=$RECIPE_ARCH lock_get '.debs[strenv(ARCH)].sha256' "$spotter_lock")
+url=$(json_get "$spotter_lock" debs "$RECIPE_ARCH" url)
+sum=$(json_get "$spotter_lock" debs "$RECIPE_ARCH" sha256)
 fetch "Spotter's agent ($RECIPE_ARCH)" "$url" "$sum" "$out/inputs/frc-coprocessor-agent.deb" \
   "Spotter's release must be public, and hold this version (spotter.lock)"
 say "fetched what $board's common image is built from, into $out"
