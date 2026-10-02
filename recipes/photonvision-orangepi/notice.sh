@@ -36,7 +36,8 @@ source of the GPL software in them: it's at the links below.
 - **PhotonVision $version** (GPL-3.0): the jar from its release, $jar, built from
   https://github.com/PhotonVision/photonvision/tree/$version
 - **Each board's base image** (PhotonVision's, from photon-image-modifier, GPL-3.0), built on
-  Armbian, Debian, and the Linux kernel, each under its own licenses (mostly GPL):
+  Armbian (built by https://github.com/PhotonVision/opi-image-generator), Debian, and the Linux
+  kernel, each under its own licenses (mostly GPL):
 NOTICE
 for board in $boards; do
   load_board "$board"
