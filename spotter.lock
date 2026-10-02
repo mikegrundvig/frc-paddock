@@ -1,0 +1,14 @@
+{
+  "version": "0.1.0",
+  "tag": "v0.1.0",
+  "debs": {
+    "arm64": {
+      "url": "https://github.com/mikegrundvig/frc-spotter/releases/download/v0.1.0/frc-coprocessor-agent_0.1.0_arm64.deb",
+      "sha256": "ecab6516bb127413e5675640de18bd87b713359c7ab8ff7d2c24f6ddff451769"
+    },
+    "amd64": {
+      "url": "https://github.com/mikegrundvig/frc-spotter/releases/download/v0.1.0/frc-coprocessor-agent_0.1.0_amd64.deb",
+      "sha256": "93d9bb1a029e0b3d3bed16b273393ec2595490ec6dceb016a012d59bdcbf6699"
+    }
+  }
+}

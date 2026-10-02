@@ -1,0 +1,19 @@
+#!/bin/sh
+# PhotonVision's pack helper (docs/photonvision-pack.md): the program this pack's definitions name.
+# It reads PhotonVision's SQLite database (java.sql), so it runs on the board's own Java, which
+# PhotonVision needs and so is always there on its boards; the agent's runtime (FRC_AGENT_JAVA) only
+# when the board has none and that runtime has java.sql. sqlite-jdbc unpacks its native library into
+# the agent's runtime directory, as /tmp may not allow running it.
+here=$(dirname "$0")
+java=$(command -v java 2>/dev/null || true)
+if [ -z "$java" ] && [ -n "${FRC_AGENT_JAVA:-}" ] &&
+  "$FRC_AGENT_JAVA" --list-modules 2>/dev/null | grep -q '^java\.sql@'; then
+  java=$FRC_AGENT_JAVA
+fi
+if [ -z "$java" ]; then
+  echo "photonvision-helper: no Java with java.sql here: PhotonVision's own is on the PATH on its images" >&2
+  exit 4
+fi
+exec "$java" -Xmx64m -Xss512k -XX:+UseSerialGC -XX:TieredStopAtLevel=1 \
+  -Dorg.sqlite.tmpdir="${RUNTIME_DIRECTORY:-${TMPDIR:-/tmp}}" \
+  -jar "$here/../lib/photonvision-helper.jar" "$@"
