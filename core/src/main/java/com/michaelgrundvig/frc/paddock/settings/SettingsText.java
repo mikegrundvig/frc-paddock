@@ -9,8 +9,8 @@ import java.util.Map;
 
 /**
  * Settings as the database holds them: each column's text, unparsed. A calibration's JSON is about
- * a megabyte of text and many times that parsed, so the agent keeps settings like this and parses
- * one row at a time ({@link #row}), for the hash, for {@code /v1/settings}, and for the backup.
+ * a megabyte of text and many times that parsed, so settings are kept like this and parsed one row
+ * at a time ({@link #row}), for the hash and for the backup.
  *
  * @param userVersion the database's schema version
  * @param rows each row's table, key, and column text, in order of table, then key

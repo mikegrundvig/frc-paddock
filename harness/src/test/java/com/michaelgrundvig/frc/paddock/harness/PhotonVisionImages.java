@@ -1,8 +1,7 @@
 package com.michaelgrundvig.frc.paddock.harness;
 
-import com.michaelgrundvig.frc.spotter.harness.Images;
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -22,11 +21,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * PhotonVision's image for the container tests, on Spotter's harness ({@link Images}): Debian 13
- * under systemd with Spotter's agent installed from its .deb; PhotonVision's jar (pinned) on a Java
- * of its own, on the path as a board's Java is (its smoke test run, so its native libraries are in
- * place on the read-only root); its unit with {@code -n}; its settings on /data; and PhotonVision's
- * pack.
+ * PhotonVision's image for the container tests, on {@link Images#base}: Debian 13 under systemd
+ * with PhotonVision's jar (pinned) on a Java of its own, on the path as a board's Java is (its
+ * smoke test run, so its native libraries are in place on the read-only root); its unit with {@code
+ * -n}, as the recipe's drop-in sets it; its settings on /data.
  */
 final class PhotonVisionImages {
   /** The Java PhotonVision runs on in its image: 25, as its 2027 builds need. */
@@ -36,19 +34,13 @@ final class PhotonVisionImages {
 
   static String photonVision() {
     Map<String, Object> context = new LinkedHashMap<>();
-    String installAgent = Images.installAgent(context);
-    context.put("pack", Images.property("paddock.photonVisionPack"));
     context.put("photonvision.jar", PhotonVisionJar.path());
     context.put("photonvision.service", resource("photonvision.service"));
-    context.put(
-        "stamp.json",
-        Images.stamp("vision-front", 11, Map.of("photonvisionVersion", PhotonVisionJar.version())));
     return Images.build(
         "photonvision",
         """
         FROM %s AS java
         FROM %s
-        %s
         COPY --from=java /opt/java/openjdk /opt/photonvision/jre
         # PhotonVision's Java is the board's: on every unit's path, as /usr/bin/java is on a board.
         RUN ln -s /opt/photonvision/jre/bin/java /usr/local/bin/java
@@ -62,13 +54,9 @@ final class PhotonVisionImages {
         RUN mkdir -p /data/photonvision_config \\
          && ln -s /data/photonvision_config /opt/photonvision/photonvision_config \\
          && systemctl enable photonvision.service
-        COPY pack /tmp/pack
-        RUN sh /tmp/pack/install.sh && rm -rf /tmp/pack
-        COPY stamp.json /etc/coprocessor/stamp.json
-        RUN mkdir -p /data/frc-spotter
         VOLUME /data
         """
-            .formatted(PHOTONVISION_JAVA, Images.base(), installAgent),
+            .formatted(PHOTONVISION_JAVA, Images.base()),
         context);
   }
 

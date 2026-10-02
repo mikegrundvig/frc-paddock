@@ -1,4 +1,4 @@
-// Paddock: reproducible coprocessor images, built on Spotter. The supporting build rules live in
+// Paddock: reproducible coprocessor images. The supporting build rules live in
 // gradle/ (quality.gradle: formatting, static analysis, coverage, the ci task).
 //
 //   ./gradlew ci        every check CI runs; run it before pushing
@@ -11,10 +11,6 @@ plugins {
 allprojects {
     group = "com.michaelgrundvig.frc.paddock"
 }
-
-// Spotter's version, as spotter.lock pins it: what Paddock's code builds on (from Spotter's source
-// beside it, settings.gradle), and what the images install (its released .deb).
-ext.spotterVersion = new groovy.json.JsonSlurper().parse(file("spotter.lock")).version
 
 // Everything CI checks: each project's ci.
 tasks.register("ci") {

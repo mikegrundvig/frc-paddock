@@ -28,9 +28,11 @@ test_manifest_lists_every_computer_and_its_checksum() {
   (cd "$TMP/release" && sha256sum --quiet -c SHA256SUMS) || fail "SHA256SUMS doesn't check"
   assert_eq "$(wc -l <"$TMP/release/SHA256SUMS")" 3 "lines in SHA256SUMS: the images and the notice"
   local manifest=$TMP/release/manifest.json
+  assert_eq "$(yq -r '.schema' "$manifest")" 3
   assert_eq "$(yq -r '.team' "$manifest")" 1234
   assert_eq "$(yq -r '.release' "$manifest")" coprocessors-1
-  assert_eq "$(yq -r '[.computers[].name] | join(" ")' "$manifest")" "vision-back vision-front"
+  assert_eq "$(yq -r '.recipe' "$manifest")" photonvision-orangepi
+  assert_eq "$(yq -r '[.computers[].hostname] | join(" ")' "$manifest")" "vision-back vision-front"
   assert_eq "$(yq -r '.computers[1].address' "$manifest")" 10.12.34.11
   assert_eq "$(yq -r '.computers[1].labels.photonvisionVersion' "$manifest")" v2027.0.0-alpha-2
   [[ $(yq -r '.computers[1].labels.settingsHash' "$manifest") =~ ^[0-9a-f]{64}$ ]] ||
@@ -55,7 +57,7 @@ test_manifest_refuses_images_from_two_releases() {
   setup_manifest
   release_image vision-front
   release_image vision-back --release coprocessors-2
-  assert_fails "don't share one version" "$ENGINE/manifest.sh" "$TMP/release"
+  assert_fails "don't share one release" "$ENGINE/manifest.sh" "$TMP/release"
 }
 
 test_manifest_refuses_an_image_without_a_stamp() {

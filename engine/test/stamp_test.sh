@@ -22,7 +22,7 @@ test_stamp_writes_the_computers_identity() {
   run_stamp vision-front
   local root=$TMP/out/root
   assert_eq "$(cat "$root/etc/hostname")" vision-front hostname
-  # Every computer in the table, by its robot address.
+  # Every computer in the input, by its robot address.
   assert_contains "$root/etc/hosts" $'10.12.34.11\tvision-front'
   assert_contains "$root/etc/hosts" $'10.12.34.12\tvision-back'
   assert_contains "$root/etc/hosts" $'127.0.0.1\tlocalhost'
@@ -57,20 +57,92 @@ test_stamp_writes_the_robot_network_profile() {
     fail "the profile's uuid isn't a UUID"
 }
 
-
-test_stamp_uses_the_tables_port_unless_the_computer_has_its_own() {
+test_stamp_labels_the_image_in_os_release() {
   setup_stamp
-  run_stamp vision-front
-  assert_eq "$(yq -r '.agentPort' "$TMP/out/root/etc/coprocessor/stamp.json")" 5808
-  yq -i 'del(.agentPort)' "$TMP/team/coprocessors.yaml"
-  run_stamp vision-front
-  assert_eq "$(yq -r '.agentPort' "$TMP/out/root/etc/coprocessor/stamp.json")" 5808 "the default"
+  run_stamp vision-front --label board=orangepi-5 --built-at 2027-01-10T18:30:00Z
+  local os_release=$TMP/out/root/usr/lib/os-release
+  # Written through /etc/os-release's link, into the file it names; the base image's own lines kept.
+  [[ -L $TMP/out/root/etc/os-release ]] || fail "/etc/os-release is no longer a link"
+  assert_contains "$os_release" 'ID=debian'
+  assert_eq "$(grep -E '^(IMAGE_|PADDOCK_)' "$os_release")" "IMAGE_ID=\"paddock-photonvision-orangepi\"
+IMAGE_VERSION=\"coprocessors-1\"
+PADDOCK_BOARD=\"orangepi-5\"
+PADDOCK_BUILT_AT=\"2027-01-10T18:30:00Z\"
+PADDOCK_PHOTONVISION_VERSION=\"v2027.0.0-alpha-2\"
+PADDOCK_RECIPE=\"photonvision-orangepi\"
+PADDOCK_RECIPE_HASH=\"2222222222222222222222222222222222222222222222222222222222222222\"
+PADDOCK_SETTINGS_HASH=\"$(yq -r '.labels.settingsHash' "$TMP/out/coproc/stamp.json")\""
+  assert_mode "$os_release" 644
+  # As a shell reads it, as os-release(5) allows.
+  # shellcheck source=/dev/null
+  assert_eq "$(. "$os_release" && echo "$IMAGE_VERSION $PADDOCK_BOARD")" "coprocessors-1 orangepi-5"
 }
 
+test_stamp_quotes_a_labels_value_as_os_release_does() {
+  setup_stamp
+  run_stamp vision-front --label 'note=a "quoted" $HOME `cmd` \ value'
+  local os_release=$TMP/out/root/usr/lib/os-release
+  # shellcheck disable=SC2016,SC1090 # literally; the image's file
+  assert_eq "$(. "$os_release" && echo "$PADDOCK_NOTE")" 'a "quoted" $HOME `cmd` \ value'
+}
 
+test_stamp_relabels_an_image_without_doubling_its_labels() {
+  setup_stamp
+  run_stamp vision-front
+  run_stamp vision-back --release coprocessors-2
+  local os_release=$TMP/out/root/usr/lib/os-release
+  assert_eq "$(grep -c '^IMAGE_VERSION=' "$os_release")" 1 "IMAGE_VERSION lines"
+  assert_contains "$os_release" 'IMAGE_VERSION="coprocessors-2"'
+  assert_eq "$(grep -c '^# Paddock: ' "$os_release")" 1 "Paddock's comment lines"
+}
 
+test_stamp_labels_an_os_release_that_isnt_a_link() {
+  setup_stamp
+  mkdir -p "$TMP/out/root/etc"
+  printf 'ID=debian\nIMAGE_ID="someone-elses"\n' >"$TMP/out/root/etc/os-release"
+  run_stamp vision-front
+  assert_contains "$TMP/out/root/etc/os-release" 'IMAGE_ID="paddock-photonvision-orangepi"'
+  assert_not_contains "$TMP/out/root/etc/os-release" someone-elses
+  assert_not_contains "$TMP/out/root/usr/lib/os-release" PADDOCK_
+}
 
+test_stamp_refuses_an_os_release_outside_the_image() {
+  setup_stamp
+  mkdir -p "$TMP/out/root/etc"
+  echo 'ID=host' >"$TMP/host-os-release"
+  ln -s ../../../host-os-release "$TMP/out/root/etc/os-release"
+  assert_fails "links outside the image" run_stamp vision-front
+  assert_eq "$(cat "$TMP/host-os-release")" "ID=host" "the file outside"
+}
 
+test_stamp_refuses_labels_that_make_one_field() {
+  setup_stamp
+  assert_fails "make one os-release field: PADDOCK_RECIPE_HASH" run_stamp vision-front --label recipeHash=x
+  assert_fails "PADDOCK_A_B" run_stamp vision-front --label a.b=1 --label a-b=2
+}
+
+test_stamp_writes_its_record_on_coproc_and_not_the_root() {
+  setup_stamp
+  run_stamp vision-back --stamp-out "$TMP/stamp.json" --built-at 2027-01-10T18:30:00Z
+  local stamp=$TMP/out/coproc/stamp.json
+  assert_file "$stamp"
+  cmp -s "$stamp" "$TMP/stamp.json" || fail "--stamp-out differs from COPROC's"
+  assert_no_file "$TMP/out/root/etc/coprocessor/stamp.json"
+  assert_eq "$(yq -r '.hostname' "$stamp")" vision-back
+  assert_eq "$(yq -r '.address' "$stamp")" 10.12.34.12
+  assert_eq "$(yq -r '.team' "$stamp")" 1234
+  assert_eq "$(yq -r '.release' "$stamp")" coprocessors-1
+  assert_eq "$(yq -r '.recipe' "$stamp")" photonvision-orangepi
+  assert_eq "$(yq -r '.builtAt' "$stamp")" 2027-01-10T18:30:00Z
+  assert_eq "$(yq -r '.recipeHash' "$stamp")" 2222222222222222222222222222222222222222222222222222222222222222
+  # The labels: --label's, then the recipe's stamp step's (the settings hash; vision-back has none),
+  # sorted by name.
+  assert_eq "$(yq -o=json -I=0 '.labels' "$stamp")" \
+    '{"photonvisionVersion":"v2027.0.0-alpha-2","settingsHash":""}'
+  assert_eq "$(yq -r 'keys | join(" ")' "$stamp")" \
+    "hostname team address release recipe recipeHash builtAt labels"
+  assert_contains "$TMP/out/coproc/README.txt" "vision-back, 10.12.34.12"
+}
 
 test_stamp_installs_the_teams_public_keys_without_their_comments() {
   setup_stamp
@@ -116,97 +188,16 @@ test_stamp_is_repeatable() {
   assert_eq "$(tree_digest "$TMP/out")" "$first" "the second stamp's files"
 }
 
-test_stamp_refuses_a_computer_not_in_the_table() {
+test_stamp_refuses_a_computer_not_in_the_input() {
   setup_stamp
-  assert_fails "no computer named 'vision-side'" run_stamp vision-side
+  assert_fails "no computer with the hostname 'vision-side'" run_stamp vision-side
 }
 
-test_stamp_refuses_team_zero() {
+test_stamp_checks_the_input_whole() {
   setup_stamp
-  yq -i '.team = 0' "$TMP/team/coprocessors.yaml"
-  assert_fails "set your team's" run_stamp vision-front
+  yq -i '.team = 0 | .computers[1].address = 11' "$TMP/team/paddock.yaml"
+  assert_fails "has 2 problems" run_stamp vision-front
 }
-
-test_stamp_refuses_addresses_outside_frcs_range() {
-  setup_stamp
-  yq -i '.computers[0].address = 5' "$TMP/team/coprocessors.yaml"
-  assert_fails "outside FRC's range" run_stamp vision-front
-  yq -i '.computers[0].address = 20' "$TMP/team/coprocessors.yaml"
-  assert_fails "outside FRC's range" run_stamp vision-front
-  yq -i '.computers[0].address = 19' "$TMP/team/coprocessors.yaml"
-  run_stamp vision-front
-}
-
-test_stamp_refuses_two_computers_at_one_address() {
-  setup_stamp
-  yq -i '.computers[1].address = 11' "$TMP/team/coprocessors.yaml"
-  assert_fails "two computers have the address 11" run_stamp vision-front
-}
-
-test_stamp_refuses_two_computers_with_one_name() {
-  setup_stamp
-  yq -i '.computers[1].name = "vision-front"' "$TMP/team/coprocessors.yaml"
-  assert_fails "two computers are named vision-front" run_stamp vision-front
-}
-
-# Numbers are written plainly: bash would read 0254 as octal, and 09 not at all.
-test_stamp_refuses_numbers_with_leading_zeros() {
-  setup_stamp
-  local table=$TMP/team/coprocessors.yaml
-  sed -i 's/^team: 1234$/team: 0254/' "$table"
-  assert_fails "team '0254' isn't a team number" run_stamp vision-front
-  sed -i 's/^team: 0254$/team: 254/; s/address: 11$/address: 09/' "$table"
-  assert_fails "address '09' is outside" run_stamp vision-front
-  sed -i 's/address: 09$/address: 9/' "$table"
-  run_stamp vision-front
-  assert_eq "$(yq -r '.address' "$TMP/out/root/etc/coprocessor/stamp.json")" 10.2.54.9
-}
-
-test_stamp_refuses_a_team_number_too_big() {
-  setup_stamp
-  yq -i '.team = 25600' "$TMP/team/coprocessors.yaml"
-  assert_fails "isn't a team number" run_stamp vision-front
-}
-
-test_stamp_refuses_a_port_that_isnt_one() {
-  setup_stamp
-  local table=$TMP/team/coprocessors.yaml port
-  for port in 0 65536 08080 '"http"'; do
-    yq -i ".agentPort = $port" "$table"
-    assert_fails "agentPort" run_stamp vision-front
-  done
-  yq -i '.agentPort = 5808 | .computers[1].agentPort = 70000' "$table"
-  assert_fails "vision-back's agentPort '70000'" run_stamp vision-front
-}
-
-test_stamp_refuses_cameras_that_arent_a_list_of_names() {
-  setup_stamp
-  local table=$TMP/team/coprocessors.yaml
-  yq -i '.computers[0].cameras = "front-left"' "$table"
-  assert_fails "cameras must be a list" run_stamp vision-front
-  yq -i '.computers[0].cameras = ["front/left"]' "$table"
-  assert_fails "cameras must each be a name" run_stamp vision-front
-  yq -i '.computers[0].cameras = [{"name": "front"}]' "$table"
-  assert_fails "cameras must each be a name" run_stamp vision-front
-  yq -i '.computers[0].cameras = [""]' "$table"
-  assert_fails "cameras must each be a name" run_stamp vision-front
-}
-
-
-test_stamp_refuses_a_name_that_cant_be_a_hostname() {
-  setup_stamp
-  yq -i '.computers[1].name = "Vision_Back"' "$TMP/team/coprocessors.yaml"
-  assert_fails "can't be a computer's name" run_stamp vision-front
-}
-
-test_stamp_refuses_an_unknown_board() {
-  setup_stamp
-  yq -i '.computers[0].image.board = "raspberry-pi-5"' "$TMP/team/coprocessors.yaml"
-  assert_fails "isn't one of" run_stamp vision-front
-}
-
-
-
 
 test_stamp_refuses_another_yq() {
   setup_stamp
@@ -216,50 +207,12 @@ test_stamp_refuses_another_yq() {
   PATH=$TMP/bin:$PATH assert_fails "mikefarah's yq" run_stamp vision-front
 }
 
-test_stamp_writes_the_agents_configuration() {
-  setup_stamp
-  run_stamp vision-front
-  cmp -s "$TMP/out/root/etc/frc-spotter/agent.json" "$TMP/agent-configs/vision-front.json" ||
-    fail "the agent's configuration wasn't written"
-  assert_mode "$TMP/out/root/etc/frc-spotter/agent.json" 644
-}
-
-test_stamp_refuses_another_computers_agent_configuration() {
-  setup_stamp
-  mkdir -p "$TMP/agent-configs"
-  echo '{"name": "vision-back", "packs": []}' >"$TMP/agent-configs/vision-front.json"
-  assert_fails "the agent configuration of 'vision-back', not vision-front" run_stamp vision-front
-}
-
-test_stamp_writes_the_stamp_twice() {
-  setup_stamp
-  run_stamp vision-back --stamp-out "$TMP/stamp.json" --built-at 2027-01-10T18:30:00Z
-  local stamp=$TMP/out/root/etc/coprocessor/stamp.json
-  assert_file "$stamp"
-  cmp -s "$stamp" "$TMP/out/coproc/stamp.json" || fail "COPROC's copy differs from the root's"
-  cmp -s "$stamp" "$TMP/stamp.json" || fail "--stamp-out differs from the root's"
-  assert_eq "$(yq -r '.name' "$stamp")" vision-back
-  assert_eq "$(yq -r '.address' "$stamp")" 10.12.34.12
-  assert_eq "$(yq -r '.team' "$stamp")" 1234
-  assert_eq "$(yq -r '.agentPort' "$stamp")" 5809 "the computer's own port"
-  assert_eq "$(yq -r '.version' "$stamp")" coprocessors-1
-  assert_eq "$(yq -r '.builtAt' "$stamp")" 2027-01-10T18:30:00Z
-  assert_eq "$(yq -r '.recipeHash' "$stamp")" 2222222222222222222222222222222222222222222222222222222222222222
-  # The labels: --label's, then the recipe's stamp step's (the settings hash; vision-back has none),
-  # sorted by name.
-  assert_eq "$(yq -o=json -I=0 '.labels' "$stamp")" \
-    '{"photonvisionVersion":"v2027.0.0-alpha-2","settingsHash":""}'
-  # The members of Spotter's Stamp record, less what the agent adds as it answers.
-  assert_eq "$(yq -r 'keys | join(" ")' "$stamp")" \
-    "name team address version recipeHash builtAt labels agentPort"
-  assert_contains "$TMP/out/coproc/README.txt" "vision-back, 10.12.34.12"
-}
-
-test_stamp_refuses_a_label_that_isnt_one() {
+test_stamp_refuses_a_label_or_release_that_isnt_one() {
   setup_stamp
   assert_fails "isn't NAME=VALUE" run_stamp vision-front --label 'no value'
   assert_fails "isn't NAME=VALUE" run_stamp vision-front --label '9=x'
   assert_fails "isn't a time in UTC" run_stamp vision-front --built-at yesterday
+  assert_fails "lowercase letters" run_stamp vision-front --release Coprocessors-1
 }
 
 test_stamp_makes_the_folders_datas_bind_mounts_need() {
@@ -267,9 +220,4 @@ test_stamp_makes_the_folders_datas_bind_mounts_need() {
   run_stamp vision-back
   assert_mode "$TMP/out/data/journal" 2755
   assert_mode "$TMP/out/data/ssh" 700
-}
-
-test_stamp_needs_the_agents_configuration() {
-  setup_stamp
-  assert_fails "no agent configuration at" run_stamp vision-front --agent-config "$TMP/none.json"
 }

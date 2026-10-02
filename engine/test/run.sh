@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 # run.sh: the engine's and the recipes' tests. Every test_* function in engine/test/*_test.sh and
 # recipes/*/test/*_test.sh runs in its own bash, in a fresh temporary directory ($TMP), with
-# Paddock's root in $PADDOCK, the engine's folder in $ENGINE, the PhotonVision recipe's in $RECIPE,
-# and Spotter's checkout in $SPOTTER (beside Paddock's, or SPOTTER_DIR).
+# Paddock's root in $PADDOCK, the engine's folder in $ENGINE, and the PhotonVision recipe's in
+# $RECIPE.
 #
 #   engine/test/run.sh [PATTERN]    # only the tests whose names contain PATTERN
 #
 # Prints PASS, FAIL (with the test's output), or SKIP (a tool this machine lacks) per test, and
 # exits non-zero if any failed. With COPROC_TESTS_STRICT=1 a skip fails too (Linux CI sets it).
 # Needs bash and, for most tests, yq (mikefarah's, version 4); the layout tests need sfdisk and
-# mkfs.fat, the provision tests systemctl and dpkg-deb, and the polkit rules' test node.
+# mkfs.fat, and the provision tests systemctl and dpkg-deb.
 set -uo pipefail
 
 test_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE=$(cd "$test_dir/.." && pwd)
 PADDOCK=$(cd "$ENGINE/.." && pwd)
 RECIPE=$PADDOCK/recipes/photonvision-orangepi
-SPOTTER=${SPOTTER_DIR:-$PADDOCK/../frc-spotter}
-export ENGINE PADDOCK RECIPE SPOTTER
+export ENGINE PADDOCK RECIPE
 pattern=${1:-}
 passed=0
 failed=0

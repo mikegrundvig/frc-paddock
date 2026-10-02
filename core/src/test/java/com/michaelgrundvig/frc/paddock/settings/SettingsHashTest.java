@@ -3,9 +3,9 @@ package com.michaelgrundvig.frc.paddock.settings;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.michaelgrundvig.frc.paddock.json.Json;
 import com.michaelgrundvig.frc.paddock.settings.SettingsHash.Action;
 import com.michaelgrundvig.frc.paddock.settings.SettingsHash.Rule;
-import com.michaelgrundvig.frc.spotter.json.Json;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -100,7 +100,7 @@ class SettingsHashTest {
 
   @Test
   void theHashIsPinned() throws SQLException {
-    // The robot's build and every agent must compute the same hash from the same settings, across
+    // Everything that hashes settings must compute the same hash from the same settings, across
     // versions. A change to the canonical form or the rules fails here first; if it's meant, it
     // changes every committed hash, and every image must be stamped again.
     assertThat(new Settings(2, List.of()).hash())

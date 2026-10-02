@@ -80,7 +80,7 @@ class HelperTest {
   void theFingerprintIsTheLayoutPhotonVisionHolds() {
     assertThat(run("fingerprint", db.toString())).isEqualTo(Helper.FOUND);
     String layout =
-        com.michaelgrundvig.frc.spotter.json.Json.compact(
+        com.michaelgrundvig.frc.paddock.json.Json.compact(
             Objects.requireNonNull(
                 settings.rows("global").stream()
                     .filter(row -> row.key().equals("fieldLayout"))

@@ -16,8 +16,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Settings read from and written to PhotonVision's SQLite database, through JDBC's own API: the
- * driver comes from whoever calls (the agent brings xerial's sqlite-jdbc), so the robot program,
- * which only hashes files, needs none.
+ * driver comes from whoever calls (the settings tool brings xerial's sqlite-jdbc), so a robot
+ * program, which only hashes files, needs none.
  *
  * <p>Nothing here knows PhotonVision's tables: it reads every table, with its primary key as the
  * row's key and every other column as JSON, so a column a new version adds comes along unasked.

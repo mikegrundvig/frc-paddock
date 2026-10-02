@@ -3,15 +3,15 @@
 #
 #   manifest.sh DIR
 #
-# DIR holds each computer's image, NAME.img.xz, beside its stamp, NAME.stamp.json (what stamp.sh
-# wrote with --stamp-out). Writes into DIR:
+# DIR holds each computer's image, NAME.img.xz, beside its stamp record, NAME.stamp.json (what
+# stamp.sh wrote with --stamp-out). Writes into DIR:
 #   SHA256SUMS     one line per file of the release (the images, and NOTICE.md when it's there), as
 #                  sha256sum writes them, so `sha256sum -c SHA256SUMS` (or PowerShell's
 #                  Get-FileHash, by eye) checks a download
-#   manifest.json  the release (team, release name, recipe hash) and each computer: name, address,
-#                  image file, image sha256, its stamp's labels (the software's version, the board,
-#                  the settings hash), and the sha256 of the common image it was stamped from, when
-#                  NAME.common-sha256 holds it
+#   manifest.json  the release (team, release name, recipe, recipe hash) and each computer:
+#                  hostname, address, image file, image sha256, its labels (the software's version,
+#                  the board, the settings hash), and the sha256 of the common image it was stamped
+#                  from, when NAME.common-sha256 holds it
 # Fails if the images don't all come from one team, release, and recipe, or an image has no stamp.
 # Needs yq (mikefarah's, version 4).
 set -euo pipefail
@@ -50,19 +50,20 @@ if [[ -f $dir/NOTICE.md ]]; then
   sums+="$(sha256sum <"$dir/NOTICE.md" | cut -c1-64)  NOTICE.md"$'\n'
 fi
 all="[$(IFS=,; echo "${entries[*]}")]"
-for field in team version recipeHash; do
+for field in team release recipe recipeHash; do
   [[ $(FIELD=$field yq -p json -o yaml -r '[.[] | .[strenv(FIELD)]] | unique | length' <<<"$all") == 1 ]] ||
     die "the images don't share one $field"
 done
 
 sort -k2 <<<"${sums%$'\n'}" >"$dir/SHA256SUMS"
 yq -p json -o=json -I=2 '{
-  "schema": 2,
+  "schema": 3,
   "team": .[0].team,
-  "release": .[0].version,
+  "release": .[0].release,
+  "recipe": .[0].recipe,
   "recipeHash": .[0].recipeHash,
-  "computers": (sort_by(.name) | map({
-    "name": .name,
+  "computers": (sort_by(.hostname) | map({
+    "hostname": .hostname,
     "address": .address,
     "image": .image,
     "imageSha256": .imageSha256,

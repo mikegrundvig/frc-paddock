@@ -1,9 +1,8 @@
-// The container tests (@ContainerTest, tagged "container"), on Spotter's harness: PhotonVision's
-// pack against the real PhotonVision (the pinned x86 jar), with Spotter's agent installed from its
-// .deb in a plain Debian 13 container under systemd, its root read-only and /data writable as on a
-// board. They play the robot with Spotter's client. They need Docker or Podman running Linux
-// containers, and skip themselves without; in CI on Linux they must run. `test -Pquick` leaves them
-// out unless --tests names them.
+// The container tests (@ContainerTest, tagged "container"): the real PhotonVision (the pinned x86
+// jar) under systemd in a plain Debian 13 container, set up as an image runs it, its root read-only
+// and /data writable as on a board. They need Docker or Podman running Linux containers, and skip
+// themselves without; in CI on Linux they must run. `test -Pquick` leaves them out unless --tests
+// names them.
 
 plugins {
     id "java"
@@ -22,49 +21,27 @@ repositories {
     mavenCentral()
 }
 
-configurations {
-    // PhotonVision's pack, as installed.
-    photonVisionPack {
-        canBeConsumed = false
-        canBeResolved = true
-    }
-}
-
 dependencies {
-    photonVisionPack project(path: ":photonvision-pack", configuration: "packFolder")
-
     errorprone libs.errorprone.core
     errorprone libs.nullaway
 
     testImplementation project(":core")
-    testImplementation "com.michaelgrundvig.frc.spotter:harness:${rootProject.spotterVersion}"
+    testImplementation platform(libs.testcontainers.bom)
+    testImplementation libs.testcontainers.core
     testImplementation platform(libs.junit.bom)
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
     testImplementation libs.assertj.core
 }
 
-// Spotter's agent's package as installed (with DEBIAN/), from Spotter's build beside this one: the
-// harness builds it into a .deb in the image, as Spotter's own container tests do.
-def spotter = gradle.includedBuild("frc-spotter")
-def agentPackage = new File(spotter.projectDir, "agent/build/package/root")
-
 tasks.named("test") {
     useJUnitPlatform()
-    dependsOn spotter.task(":agent:agentPackage")
-    def photonVisionPack = configurations.photonVisionPack
-    inputs.files(photonVisionPack).withPropertyName("photonVisionPack").withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.dir(agentPackage).withPropertyName("agentPackage").withPathSensitivity(PathSensitivity.RELATIVE).optional()
-    doFirst {
-        systemProperty "spotter.agentPackage", agentPackage.absolutePath
-        systemProperty "paddock.photonVisionPack", photonVisionPack.singleFile.absolutePath
-    }
     // Downloads the tests need (PhotonVision's jar), kept beside Gradle's own caches so a clean
     // build doesn't fetch them again.
     systemProperty "paddock.downloadCache", new File(gradle.gradleUserHomeDir, "caches/frc-paddock").absolutePath
     // In CI on Linux, Docker is there: a container test that can't run fails rather than skips.
     def os = System.getProperty("os.name").toLowerCase()
-    systemProperty "spotter.requireContainers", (System.getenv("CI") != null && os.contains("linux")).toString()
+    systemProperty "paddock.requireContainers", (System.getenv("CI") != null && os.contains("linux")).toString()
     // Rootless Podman, as on a developer's Linux machine: its user socket, when it's there and
     // nothing else was asked for. Testcontainers' cleanup container (Ryuk) needs a root socket, so the
     // tests stop their own containers (and remove what a crashed run left, by label).

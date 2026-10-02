@@ -26,12 +26,12 @@ public enum Board {
     this.id = id;
   }
 
-  /** The board's name in coprocessors.yaml, such as {@code orangepi-5}. */
+  /** The board's name in paddock.yaml, such as {@code orangepi-5}. */
   public String id() {
     return id;
   }
 
-  /** The board with this name in coprocessors.yaml, if there is one. */
+  /** The board with this name in paddock.yaml, if there is one. */
   public static Optional<Board> byId(String id) {
     return Arrays.stream(values()).filter(board -> board.id.equals(id)).findFirst();
   }

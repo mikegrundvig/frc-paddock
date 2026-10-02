@@ -3,7 +3,9 @@
 # naming the exact software in them and where its source is, as the GPL asks of whoever passes the
 # images on.
 #
-#   notice.sh --boards "BOARD..." --spotter-lock FILE
+#   notice.sh --boards "BOARD..." --packages FILE
+#
+#   --packages  the team's packages, as the engine's plan.sh lists them (packages.list)
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -11,11 +13,11 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$here/../../engine/lib/common.sh"
 load_recipe "$here"
 
-boards="" spotter_lock=""
+boards="" packages=""
 while (($#)); do
   case $1 in
     --boards) boards=${2:?}; shift 2 ;;
-    --spotter-lock) spotter_lock=${2:?}; shift 2 ;;
+    --packages) packages=${2:?}; shift 2 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -23,7 +25,7 @@ require_yq
 lock=$RECIPE_DIR/$RECIPE_LOCK
 version=$(lock_get '.version' "$lock")
 jar=$(lock_get '.jar.url' "$lock")
-spotter=$(lock_get '.version' "$spotter_lock")
+[[ -f $packages ]] || die "no package list at '$packages' (--packages)"
 
 cat <<NOTICE
 # The software in these images, and its source
@@ -45,12 +47,14 @@ for board in $boards; do
   tag=$(sed -n 's|.*/releases/download/\([^/]*\)/.*|\1|p' <<<"$url")
   echo "  - $BOARD_TITLE: ${url##*/}, from $url, built from https://github.com/PhotonVision/photon-image-modifier/tree/$tag"
 done
+if [[ -s $packages ]]; then
+  echo "- **The packages the team's images get**, each under its own license (in the image, each"
+  echo "  package's /usr/share/doc/<package>/copyright), from:"
+  while read -r _ url; do
+    [[ -n $url ]] && echo "  - $url"
+  done <"$packages"
+fi
 cat <<NOTICE
-- **Spotter's agent $spotter** (MIT): https://github.com/mikegrundvig/frc-spotter/tree/v$spotter,
-  with its own Java runtime, OpenJDK's (GPL-2.0 with the Classpath Exception), whose source is at
-  https://github.com/openjdk/jdk
-- **PhotonVision's pack** (MIT): Paddock's, https://github.com/mikegrundvig/frc-paddock, with
-  xerial's sqlite-jdbc (Apache-2.0)
-- **Debian's packages the recipe adds** (nvme-cli, polkitd), each under its own license, their
-  source at https://sources.debian.org/
+- **Debian's packages the recipe adds** (nvme-cli), and those the team's packages depend on, each
+  under its own license, their source at https://sources.debian.org/
 NOTICE

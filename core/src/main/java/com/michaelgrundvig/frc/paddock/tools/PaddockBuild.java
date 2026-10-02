@@ -1,18 +1,14 @@
 package com.michaelgrundvig.frc.paddock.tools;
 
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import com.michaelgrundvig.frc.paddock.settings.Settings;
 import com.michaelgrundvig.frc.paddock.settings.SettingsFiles;
-import com.michaelgrundvig.frc.paddock.table.PaddockTable;
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
-import com.michaelgrundvig.frc.spotter.table.CompiledTable;
-import com.michaelgrundvig.frc.spotter.tools.CoprocessorBuild;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,17 +16,13 @@ import java.util.TreeMap;
 import java.util.stream.Stream;
 
 /**
- * Paddock's build tasks, for a robot's build and the image workflow, with Paddock's own code, so
- * they check exactly what the images do:
+ * Paddock's build tasks, for a robot's build, with Paddock's own code, so they check exactly what
+ * the images do:
  *
  * <ul>
  *   <li>{@code check-lock <lock> [<vendordep>]}: checks PhotonVision's lock (every address and
  *       checksum, or a placeholder), against PhotonLib's vendordep when given, and names the
  *       placeholders still in it;
- *   <li>{@code table [--packs DIR]... <repository> <lock> <out.json>}: the compiled table for the
- *       robot program (Spotter's, its computers' probes from their packs), checked by Paddock's
- *       rules too ({@link PaddockTable}), with the label every image must carry: {@code
- *       photonvisionVersion}, the lock's;
  *   <li>{@code settings-hashes <settings> <out.json>}: each computer's committed settings hash, by
  *       name, from the team's settings folder (one folder per computer; an empty one is none).
  * </ul>
@@ -38,9 +30,6 @@ import java.util.stream.Stream;
  * <p>A failure prints what's wrong and exits with status 1.
  */
 public final class PaddockBuild {
-  /** The stamp label of the PhotonVision version in an image. */
-  public static final String VERSION_LABEL = "photonvisionVersion";
-
   private PaddockBuild() {}
 
   /** Runs one task; see the class. */
@@ -52,25 +41,10 @@ public final class PaddockBuild {
   }
 
   /** Runs one task, printing to {@code out} and {@code err}; the exit status. */
-  static int run(String[] given, PrintStream out, PrintStream err) throws IOException {
+  static int run(String[] args, PrintStream out, PrintStream err) throws IOException {
     try {
-      List<Path> packFolders = new ArrayList<>();
-      List<String> rest = new ArrayList<>();
-      for (int i = 0; i < given.length; i++) {
-        if (given[i].equals("--packs") && i + 1 < given.length) {
-          packFolders.add(Path.of(given[++i]));
-        } else {
-          rest.add(given[i]);
-        }
-      }
-      String[] args = rest.toArray(new String[0]);
       if ((args.length == 2 || args.length == 3) && args[0].equals("check-lock")) {
         out.print(checkLock(Path.of(args[1]), args.length == 3 ? Path.of(args[2]) : null));
-        return 0;
-      }
-      if (args.length == 4 && args[0].equals("table")) {
-        CompiledTable table = compile(Path.of(args[1]), packFolders, Path.of(args[2]));
-        write(Path.of(args[3]), Json.pretty(table.toJson()));
         return 0;
       }
       if (args.length == 3 && args[0].equals("settings-hashes")) {
@@ -79,10 +53,7 @@ public final class PaddockBuild {
         write(Path.of(args[2]), Json.pretty(json.build()));
         return 0;
       }
-      err.println(
-          "Usage: check-lock <lock> [<vendordep>]"
-              + " | table [--packs DIR]... <repository> <lock> <out.json>"
-              + " | settings-hashes <settings> <out.json>");
+      err.println("Usage: check-lock <lock> [<vendordep>] | settings-hashes <settings> <out.json>");
       return 2;
     } catch (IllegalArgumentException e) {
       err.println(e.getMessage());
@@ -111,22 +82,6 @@ public final class PaddockBuild {
         + ": not yet known, so images can't be built yet: "
         + String.join(", ", placeholders)
         + "\n";
-  }
-
-  /** The robot's compiled table: Spotter's, checked by Paddock's rules, with the lock's label. */
-  static CompiledTable compile(Path repository, List<Path> packFolders, Path lockFile)
-      throws IOException {
-    CompiledTable spotters = CoprocessorBuild.compile(repository, packFolders);
-    List<String> problems = PaddockTable.problems(spotters.table());
-    if (!problems.isEmpty()) {
-      throw new IllegalArgumentException(String.join("\n", problems));
-    }
-    PhotonVisionLock lock = PhotonVisionLock.parse(read(lockFile));
-    return new CompiledTable(
-        spotters.table(),
-        spotters.recipeHash(),
-        Map.of(VERSION_LABEL, lock.version()),
-        spotters.probeSets());
   }
 
   /** Each computer's committed settings hash, by name: one folder per computer. */

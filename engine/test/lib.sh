@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Helpers and fixtures for the engine's and the recipes' tests; run.sh sources this into each test.
 # $PADDOCK is Paddock's root, $ENGINE the engine's folder, $RECIPE the PhotonVision recipe's, and
-# $TMP the test's own temporary directory. $SPOTTER is Spotter's checkout, beside Paddock's.
+# $TMP the test's own temporary directory.
 
 fail() {
   printf 'FAILED: %s\n' "$*" >&2
@@ -82,44 +82,41 @@ tree_digest() {
   )
 }
 
-# A team's repository, as the starter lays it out: the table (team 1234, two computers on two
-# boards), settings for one computer, and an SSH key; and each computer's agent configuration, as
-# Spotter's build tool writes them. Prints nothing; the repository is $TMP/team.
+# A team's repository, as the starter lays it out: Paddock's input (team 1234, two computers on two
+# boards, a package, and a file), settings for one computer, and an SSH key. Prints nothing; the
+# repository is $TMP/team.
 make_team() {
   local team=$TMP/team
-  mkdir -p "$team/settings/vision-front/cameras" "$TMP/agent-configs"
-  cat >"$team/coprocessors.yaml" <<'EOF'
+  mkdir -p "$team/settings/vision-front/cameras" "$team/packs"
+  cat >"$team/paddock.yaml" <<'EOF'
 team: 1234
-agentPort: 5808
 computers:
-  - name: vision-front
+  - hostname: vision-front
     address: 11
-    cameras: [front-left, front-right]
-    image:
-      board: orangepi-5
-  - name: vision-back
+    board: orangepi-5
+  - hostname: vision-back
     address: 12
-    cameras: [back]
-    agentPort: 5809
-    image:
-      board: orangepi-5-plus
+    board: orangepi-5-plus
+packages:
+  - url: https://example.org/releases/example-tool_1.0.0_arm64.deb
+    sha256: 1111111111111111111111111111111111111111111111111111111111111111
+files:
+  - path: packs/example.yaml
+    destination: /etc/example/packs/example.yaml
+    mode: "0644"
 EOF
+  echo 'checks: [example]' >"$team/packs/example.yaml"
   echo '{"userVersion": 2}' >"$team/settings/vision-front/database.json"
   echo '{"name": "front-left", "calibration": [1, 2, 3]}' \
     >"$team/settings/vision-front/cameras/front-left.json"
   echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyForTestsOnly team-laptop' \
     >"$team/authorized_keys"
-  local name
-  for name in vision-front vision-back; do
-    printf '{"name": "%s", "controller": "10.12.34.2", "port": 5808, "packs": ["photonvision"],\n "cameras": [], "probes": []}\n' \
-      "$name" >"$TMP/agent-configs/$name.json"
-  done
 }
 
 # Paddock's engine and recipes, copied to $TMP/paddock, so a test may change a lock.
 make_paddock_copy() {
   mkdir -p "$TMP/paddock"
-  cp -R "$ENGINE" "$PADDOCK/recipes" "$PADDOCK/spotter.lock" "$TMP/paddock/"
+  cp -R "$ENGINE" "$PADDOCK/recipes" "$TMP/paddock/"
 }
 
 # The settings tool's stand-in: copies the empty database, appends the rows (so a test can see
@@ -145,22 +142,34 @@ EOF
   printf 'SQLite format 3 (empty, for the tests)\n' >"$TMP/inputs/empty-photon.sqlite"
 }
 
-# Runs stamp.sh for a computer of make_team's table into $TMP/out/{root,coproc,data}, with any
+# The root of an image as stamping finds it, in $TMP/out/root: its os-release, Debian's way (a link
+# from /etc to /usr/lib).
+make_stamp_root() {
+  local root=$TMP/out/root
+  mkdir -p "$root/etc" "$root/usr/lib" "$TMP/out/coproc" "$TMP/out/data"
+  if [[ ! -e $root/usr/lib/os-release ]]; then
+    printf 'PRETTY_NAME="Armbian (fixture)"\nNAME="Debian GNU/Linux"\nID=debian\n' \
+      >"$root/usr/lib/os-release"
+  fi
+  [[ -e $root/etc/os-release || -L $root/etc/os-release ]] || ln -s ../usr/lib/os-release "$root/etc/os-release"
+}
+
+# Runs stamp.sh for a computer of make_team's input into $TMP/out/{root,coproc,data}, with any
 # extra options after the name.
 run_stamp() {
   local name=$1
   shift
-  mkdir -p "$TMP/out/root" "$TMP/out/coproc" "$TMP/out/data"
-  TOOL_LOG=$TMP/tool.log "$ENGINE/stamp.sh" --computer "$name" --table "$TMP/team/coprocessors.yaml" \
+  make_stamp_root
+  TOOL_LOG=$TMP/tool.log "$ENGINE/stamp.sh" --computer "$name" --config "$TMP/team/paddock.yaml" \
     --recipe-dir "$RECIPE" --root "$TMP/out/root" --coproc "$TMP/out/coproc" --data "$TMP/out/data" \
     --release coprocessors-1 \
     --recipe-hash 2222222222222222222222222222222222222222222222222222222222222222 \
-    --agent-config "$TMP/agent-configs/$name.json" --label photonvisionVersion=v2027.0.0-alpha-2 \
+    --label photonvisionVersion=v2027.0.0-alpha-2 \
     --keys "$TMP/team/authorized_keys" --settings "$TMP/team/settings" --inputs "$TMP/inputs" "$@"
 }
 
 # A root shaped like PhotonVision's Armbian image, as far as provision.sh looks at it, in
-# $TMP/root; and the agent's jar and unit, and a PhotonVision jar, in $TMP.
+# $TMP/root; and a PhotonVision jar, a team's package, and a team's file, in $TMP.
 make_image_root() {
   local root=$TMP/root
   mkdir -p "$root"/{boot,root,usr/lib,var/lib/dbus,etc/default,etc/netplan,etc/ssh/sshd_config.d} \
@@ -227,50 +236,47 @@ EOF
   chmod 0640 "$root/etc/shadow" "$root/etc/shadow-"
   echo 'photon ALL=(ALL) NOPASSWD: ALL' >"$root/etc/sudoers.d/010_photon-nopasswd"
 
-  make_agent_deb
-  make_photonvision_pack
   mkdir -p "$TMP/inputs"
   echo 'photonvision jar' >"$TMP/inputs/photonvision.jar"
+  make_software
 }
 
-# The agent's package as built (agent/build.gradle's agentPackage), but for its jar and runtime:
-# its real launcher, polkit rules, sysusers file, and maintainer scripts, and its unit from
-# $TMP/agent-unit (the real one, copied there first), into $TMP/frc-spotter.deb. A test
-# that changes $TMP/agent-unit packs it again by calling this again.
-make_agent_deb() {
-  local agent=$SPOTTER/agent/package pkg=$TMP/agent-package
-  [[ -d $agent ]] || skip "needs Spotter's checkout at $SPOTTER (its agent's package files)"
+# A team's package, as a .deb: example-tool, a program and its unit, with maintainer scripts (which
+# --offline doesn't run), in $TMP/packages/00-example-tool_1.0.0_arm64.deb.
+make_package() {
   need dpkg-deb
+  local pkg=$TMP/example-package
   rm -rf "$pkg"
-  mkdir -p "$pkg/DEBIAN" "$pkg/usr/lib/frc-spotter/bin" "$pkg/usr/lib/systemd/system" \
-    "$pkg/usr/lib/sysusers.d" "$pkg/usr/share/polkit-1/rules.d" \
-    "$pkg/usr/lib/frc-spotter/packs/builtin"
-  [[ -f $TMP/agent-unit ]] || cp "$agent/frc-spotter.service" "$TMP/agent-unit"
-  echo 'agent jar' >"$pkg/usr/lib/frc-spotter/frc-spotter.jar"
-  install -m 0755 "$agent/launcher/frc-spotter" "$pkg/usr/lib/frc-spotter/bin/"
-  cp "$TMP/agent-unit" "$pkg/usr/lib/systemd/system/frc-spotter.service"
-  cp "$agent/frc-spotter.sysusers" "$pkg/usr/lib/sysusers.d/frc-spotter.conf"
-  cp "$agent"/*.rules "$pkg/usr/share/polkit-1/rules.d/"
-  echo '{"pack": "builtin"}' >"$pkg/usr/lib/frc-spotter/packs/builtin/pack.json"
-  install -m 0755 "$agent/debian/postinst" "$agent/debian/prerm" "$agent/debian/postrm" "$pkg/DEBIAN/"
-  sed 's/@VERSION@/0.1.0/; s/@ARCH@/arm64/; s/@SIZE@/1/' "$agent/debian/control.in" >"$pkg/DEBIAN/control"
-  dpkg-deb --root-owner-group --build "$pkg" "$TMP/frc-spotter.deb" >/dev/null
+  mkdir -p "$pkg/DEBIAN" "$pkg/usr/bin" "$pkg/usr/lib/systemd/system" "$TMP/packages"
+  printf '#!/bin/sh\necho example\n' >"$pkg/usr/bin/example-tool"
+  chmod 0755 "$pkg/usr/bin/example-tool"
+  printf '[Service]\nExecStart=/usr/bin/example-tool\n[Install]\nWantedBy=multi-user.target\n' \
+    >"$pkg/usr/lib/systemd/system/example-tool.service"
+  printf '#!/bin/sh\nset -e\ndeb-systemd-helper enable example-tool.service\n' >"$pkg/DEBIAN/postinst"
+  chmod 0755 "$pkg/DEBIAN/postinst"
+  printf 'Package: example-tool\nVersion: 1.0.0\nArchitecture: arm64\nMaintainer: nobody <nobody@localhost>\nDescription: a team'"'"'s package, for the tests\n' \
+    >"$pkg/DEBIAN/control"
+  dpkg-deb --root-owner-group --build "$pkg" "$TMP/packages/00-example-tool_1.0.0_arm64.deb" >/dev/null
 }
 
-# PhotonVision's pack as built (:photonvision-pack:packFolder), but for its helper's jar.
-make_photonvision_pack() {
-  local source=$PADDOCK/packs/photonvision/package pack=$TMP/photonvision-pack
-  mkdir -p "$pack/bin" "$pack/lib"
-  echo '{"pack": "photonvision"}' >"$pack/pack.json"
-  echo 'helper jar' >"$pack/lib/photonvision-helper.jar"
-  install -m 0755 "$source/launcher/photonvision-helper" "$pack/bin/"
-  install -m 0755 "$source/install.sh" "$pack/"
-  cp "$source"/*.rules "$pack/"
+# The team's files, as plan.sh writes them: a pack read by root alone, and a script others may run,
+# in $TMP/software/files.
+make_files() {
+  local files=$TMP/software/files
+  mkdir -p "$files"
+  echo 'checks: [example]' >"$files/0"
+  printf '#!/bin/sh\necho checked\n' >"$files/1"
+  printf '0600 /etc/example/packs/example.yaml 0\n0755 /opt/team/check.sh 1\n' >"$files/files.list"
+}
+
+# What a team's images get: a package and two files.
+make_software() {
+  make_package
+  make_files
 }
 
 # Runs the recipe's provision.sh on make_image_root's tree, offline, with any extra options.
 run_provision() {
   "$RECIPE/provision.sh" --board orangepi-5 --target "$TMP/root" --offline \
-    --inputs "$TMP/inputs" --agent-deb "$TMP/frc-spotter.deb" \
-    --pack "$TMP/photonvision-pack" "$@"
+    --inputs "$TMP/inputs" --packages "$TMP/packages" --files "$TMP/software/files" "$@"
 }

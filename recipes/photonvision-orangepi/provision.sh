@@ -8,8 +8,7 @@
 # its own block of /etc/fstab) rather than adding to one.
 #
 # In order, it:
-#   - installs the packages it adds, at pinned versions: nvme-cli (the drive's health) and polkitd
-#     (the agent's soft-off);
+#   - installs the package it adds, at a pinned version: nvme-cli (to read the drive's health);
 #   - installs the pinned PhotonVision jar, and runs PhotonVision with -n, so it leaves the network
 #     alone;
 #   - leaves the network to NetworkManager alone, with one profile, the robot's static address,
@@ -21,8 +20,7 @@
 #   - closes the base image's logins: no console autologin, no console at all, and no password
 #     that works (root's and photon's were public defaults);
 #   - makes SSH take keys only, with a host key made per drive;
-#   - installs Spotter's agent from its .deb and the packs (PhotonVision's, and the team's), with
-#     their polkit rules, by the engine's install-spotter.sh;
+#   - installs the team's packages and copies in its files, by the engine's install-software.sh;
 #   - runs the team's provision hook, if it has one;
 #   - runs PhotonVision's --smoketest, which also makes an empty settings database, and leaves
 #     its native libraries extracted where PhotonVision looks for them (the root is read-only
@@ -34,21 +32,20 @@
 # engine's layout.sh: this writes what inside the root refers to them (by label).
 #
 # Usage:
-#   provision.sh --board BOARD --inputs DIR --agent-deb FILE [--pack DIR]... [--hook FILE] \
-#       [--out DIR]
+#   provision.sh --board BOARD --inputs DIR --packages DIR --files DIR [--hook FILE] [--out DIR]
 #
 #   --inputs     the lock's inputs, downloaded and checked (the engine's fetch.sh):
 #                photonvision.jar
-#   --agent-deb  Spotter's agent, its package for arm64 (spotter.lock's, checked)
-#   --pack       a pack's folder as built, installed by its install.sh: PhotonVision's, and any of
-#                the team's
+#   --packages   the team's packages (.deb) for arm64, downloaded and checked (fetch.sh)
+#   --files      the team's files, as the engine's plan.sh writes them (files.list and the files)
 #   --hook       a script of the team's, run last as root in the image (its $1: the image's root)
 #   --out        where the smoke test runs, and so where its photonvision_config/ (with the empty
 #                photon.sqlite stamping starts from) is left; outside the image, so the image
 #                stays clean. Without it, a temporary folder, removed afterwards.
 #
 # For the tests: --target DIR applies the changes to a directory tree instead of /, and --offline
-# leaves out what runs the image's own programs (apt-get, dpkg, java).
+# leaves out what runs the image's own programs (apt-get, dpkg, java), and unpacks the team's
+# packages instead of installing them.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -59,8 +56,8 @@ load_recipe "$here"
 
 board=""
 inputs=""
-agent_deb=""
-packs=()
+packages=""
+files=""
 hook=""
 smoke_dir=""
 target=/
@@ -68,7 +65,7 @@ offline=no
 
 # The packages it adds, pinned to Debian 13 (trixie)'s versions. A new version on the mirror
 # fails the build here, loudly, until the pin is updated: the image changes only by a commit.
-PACKAGES=(nvme-cli=2.13-2 polkitd=126-2)
+PACKAGES=(nvme-cli=2.13-2)
 
 usage() {
   sed -n '/^# Usage/,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//' >&2
@@ -79,8 +76,8 @@ while (($#)); do
   case $1 in
     --board) board=${2:?}; shift 2 ;;
     --inputs) inputs=${2:?}; shift 2 ;;
-    --agent-deb) agent_deb=${2:?}; shift 2 ;;
-    --pack) packs+=("${2:?}"); shift 2 ;;
+    --packages) packages=${2:?}; shift 2 ;;
+    --files) files=${2:?}; shift 2 ;;
     --hook) hook=${2:?}; shift 2 ;;
     --out) smoke_dir=${2:?}; shift 2 ;;
     --target) target=${2:?}; shift 2 ;;
@@ -94,7 +91,7 @@ done
 is_board "$board" || die "unknown board '$board' (one of: $RECIPE_BOARDS)"
 [[ -n $inputs ]] || die "--inputs is required: the lock's inputs, downloaded"
 pv_jar=$inputs/photonvision.jar
-[[ -n $agent_deb ]] || die "--agent-deb is required"
+[[ -n $packages && -n $files ]] || die "--packages and --files are required (the team's, perhaps none)"
 [[ -z $hook || -f $hook ]] || die "no provision hook at $hook"
 if [[ $offline == no && $EUID -ne 0 ]]; then
   die "run as root, inside the image's chroot"
@@ -151,8 +148,7 @@ check_base() {
 }
 
 step_packages() {
-  # nvme-cli reads the drive's health for the agent (the engine's coprocessor-facts); polkitd applies
-  # the agent's and the pack's soft-off rules (and the agent's package depends on it).
+  # nvme-cli reads the NVMe drive's health, for whatever watches the computer.
   local package missing=()
   for package in "${PACKAGES[@]}"; do
     if [[ $(dpkg-query -W -f='${Status} ${Version}' "${package%%=*}" 2>/dev/null) != "install ok installed ${package#*=}" ]]; then
@@ -188,9 +184,9 @@ RequiresMountsFor=$IMG_PV_CONFIG
 # stamping), never PhotonVision's.
 ExecStart=
 ExecStart=$exec_line -n
-# Soft-off says it's safe to switch the board off once PhotonVision's port has closed, so its stop
-# is bounded: systemd's default would wait 90 s before killing it. 15 s is a proposal, to confirm
-# on the bench (bench-procedures.md, B3).
+# A power-off waits for PhotonVision to stop, which saves its settings: bounded, where systemd's
+# default would wait 90 s before killing it. 15 s is a proposal, to confirm on the bench
+# (bench-procedures.md, B3).
 TimeoutStopSec=15s
 EOF
 }
@@ -324,15 +320,13 @@ step_ssh() {
   units enable coprocessor-ssh-hostkey.service
 }
 
-step_agent() {
-  local args=(--deb "$agent_deb" --root "$target") pack
-  for pack in "${packs[@]}"; do
-    args+=(--pack "$pack")
-  done
+# The team's packages and files: Paddock doesn't know what they are.
+step_software() {
+  local args=(--packages "$packages" --files "$files" --root "$target")
   if [[ $offline == yes ]]; then
     args+=(--offline)
   fi
-  "$engine/install-spotter.sh" "${args[@]}"
+  "$engine/install-software.sh" "${args[@]}"
 }
 
 # The team's hook: run last, as root, in the image (its root as $1).
@@ -411,7 +405,7 @@ step_network
 step_storage
 step_logins
 step_ssh
-step_agent
+step_software
 step_hook
 if [[ $offline == no ]]; then
   step_smoketest

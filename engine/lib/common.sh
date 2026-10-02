@@ -1,6 +1,6 @@
 # shellcheck shell=bash disable=SC2034 # the scripts that source this use its values
 # Shared by the engine's scripts and the recipes: the names, sizes, and paths every step agrees on,
-# and the readers of the table, the recipe, and the locks. Sourced, never run.
+# and the readers of Paddock's input (paddock.yaml), the recipe, and the locks. Sourced, never run.
 #
 # A recipe's provision.sh sources this inside the image's chroot, where there's no yq: only the
 # functions that say so need it.
@@ -8,7 +8,7 @@
 # ---------------------------------------------------------------------------------------------
 # The drive's layout, the same on every board (a recipe's board files hold what differs).
 # ---------------------------------------------------------------------------------------------
-COPROC_LABEL=COPROC          # small FAT partition: a copy of the stamp, readable on Windows
+COPROC_LABEL=COPROC          # small FAT partition: the stamp record, readable on Windows
 COPROC_MIB=32
 DATA_LABEL=coproc-data       # ext4: everything that's written while the computer runs
 DATA_MIB=${COPROC_DATA_MIB:-8192}  # the tests set COPROC_DATA_MIB to keep their images small
@@ -16,15 +16,10 @@ ALIGN_MIB=16                 # partitions start on 16 MiB, as Armbian's own do
 
 # On the image.
 IMG_DATA=/data
-IMG_STAMP=/etc/coprocessor/stamp.json
 IMG_JOURNAL=/var/log/journal
-# Spotter's agent, as its package installs it, and its configuration, as stamping writes it.
-IMG_AGENT_UNIT=/usr/lib/systemd/system/frc-spotter.service
-IMG_AGENT_CONFIG=/etc/frc-spotter/agent.json
-# The account the agent runs as: its unit's User=. Its package's polkit rule lets this account, and
-# no other, power the board off; a pack's lets it do what that pack's steps need.
-IMG_AGENT_USER=frc-spotter
 IMG_CONNECTION=/etc/NetworkManager/system-connections/robot.nmconnection
+# The files stamping writes into the root, which none of the team's files may be.
+IMG_STAMPED="/etc/hostname /etc/hosts /etc/machine-id /etc/os-release /usr/lib/os-release $IMG_CONNECTION"
 # On /data.
 DATA_JOURNAL=journal
 DATA_SSH=ssh
@@ -35,9 +30,8 @@ ADDRESS_MIN=6
 ADDRESS_MAX=19
 NETMASK_BITS=24
 GATEWAY_OCTET=4
-DEFAULT_AGENT_PORT=5808
 
-# The recipe used when neither the caller nor the table names one.
+# The recipe used when the caller names none.
 DEFAULT_RECIPE=photonvision-orangepi
 
 # ---------------------------------------------------------------------------------------------
@@ -121,8 +115,8 @@ derived_uuid() {
   printf '%s-%s-5%s-%s%s-%s' "${h:0:8}" "${h:8:4}" "${h:13:3}" "$variant" "${h:17:3}" "${h:20:12}"
 }
 
-# Reads a value from the table (needs yq). Prints nothing for a missing value.
-table_get() {
+# Reads a value from Paddock's input (needs yq). Prints nothing for a missing value.
+config_get() {
   yq -r "$1 // \"\"" "$2"
 }
 
@@ -131,56 +125,175 @@ lock_get() {
   yq -p yaml -o yaml -r "$1 // \"\"" "$2"
 }
 
-# A port number: 1 to 65535, written without leading zeros.
-is_port() {
-  [[ $1 =~ ^[1-9][0-9]{0,4}$ ]] || return 1
-  ((10#$1 <= 65535))
+# A file's mode in octal, as Paddock's input writes it ("0644", 0644, or 644): four digits.
+file_mode() {
+  printf '%04o' $((8#$1))
 }
 
-# The recipe the table names (image.recipe), or none.
-table_recipe() {
-  table_get '.image.recipe' "$1"
+# A path in the team's repository, from its root: names of letters, digits, '.', '_', '@', '+',
+# and '-', joined by '/', none of them '.' or '..'. With a leading '/', a path in the image.
+is_relative_path() {
+  [[ /$1 =~ ^(/[A-Za-z0-9._@+-]+)+$ && ! /$1/ =~ /\.\.?/ ]]
 }
 
-# Checks the whole table (needs yq) for the loaded recipe: the team, and every computer's name,
-# address, board (image.board, one of the recipe's), port, and cameras. Numbers must be written
-# plainly (no leading zeros, which bash would read as octal), and are compared as numbers. Prints
-# nothing; dies on the first problem, naming it.
-check_table() {
-  local table=$1 team port count i name address board kind cameras
-  local -A names=() addresses=()
-  [[ -f $table ]] || die "no table at $table"
-  team=$(table_get '.team' "$table")
-  if ! [[ $team =~ ^[1-9][0-9]{0,4}$ ]] || ((10#$team > 25599)); then
-    die "$table: team '$team' isn't a team number (1 to 25599, no leading zeros); set your team's"
+is_image_path() {
+  [[ $1 == /* ]] && is_relative_path "${1#/}"
+}
+
+# Checks Paddock's input (paddock.yaml) whole, for the loaded recipe (needs yq), and dies listing
+# every problem it found, or prints nothing. REPO, when given, is the team's repository, where each
+# of the files' paths must be a file. The input holds:
+#   team        the team number
+#   computers   each computer's hostname, address (the last number of 10.TE.AM.x), and board
+#   packages    each package (.deb) the images get: its https url and its sha256
+#   files       each file the images get: its path in the team's repository, its destination in
+#               the image, and its mode
+# and nothing else: a key it doesn't know, or a key given twice, is a problem too. Numbers are
+# written plainly (no leading zeros, which bash would read as octal), and compared as numbers.
+check_config() {
+  local config=$1 repo=${2-} kind value n i what hostname address board url path destination mode
+  local -a problems=()
+  local -A hostnames=() addresses=() urls=() destinations=()
+  [[ -f $config ]] || die "no input at $config"
+  kind=$(yq -r 'tag' "$config" 2>&1) || die "$config isn't YAML: $kind"
+  [[ $kind == '!!map' ]] || die "$config: expected team, computers, packages, and files"
+
+  # Keys of the map at a path that aren't allowed, or are given twice (yq keeps both; YAML forbids
+  # it).
+  config_keys() {
+    local key
+    while IFS= read -r key; do
+      [[ " $2 " == *" $key "* ]] || problems+=("$3: unknown key '$key' (it takes: ${2// /, })")
+    done < <(yq -r "$1 | keys | .[]" "$config")
+    while IFS= read -r key; do
+      problems+=("$3: '$key' is given twice")
+    done < <(yq -r "$1 | keys | group_by(.) | map(select(length > 1) | .[0]) | .[]" "$config")
+  }
+  # A scalar's text at a path, or nothing for a missing value, a list, or a mapping.
+  scalar() {
+    case $(yq -r "$1 | tag" "$config") in
+      '!!null' | '!!map' | '!!seq') ;;
+      *) yq -r "$1" "$config" ;;
+    esac
+  }
+
+  config_keys . "team computers packages files" "$config"
+  value=$(scalar .team)
+  if ! [[ $(yq -r '.team | tag' "$config") == '!!int' && $value =~ ^[1-9][0-9]{0,4}$ ]] ||
+    ((10#$value > 25599)); then
+    problems+=("team '$value' isn't a team number (1 to 25599, no leading zeros): set your team's")
   fi
-  port=$(table_get '.agentPort' "$table")
-  [[ -z $port ]] || is_port "$port" || die "$table: agentPort '$port' isn't a port (1 to 65535)"
-  [[ $(yq -r '.computers | tag' "$table") == '!!seq' ]] || die "$table: computers must be a list"
-  count=$(yq -r '.computers | length' "$table")
-  ((count > 0)) || die "$table: no computers listed"
-  for ((i = 0; i < count; i++)); do
-    name=$(table_get ".computers[$i].name" "$table")
-    address=$(table_get ".computers[$i].address" "$table")
-    board=$(table_get ".computers[$i].image.board" "$table")
-    port=$(table_get ".computers[$i].agentPort" "$table")
-    is_hostname "$name" ||
-      die "$table: '$name' can't be a computer's name: lowercase letters, digits, and hyphens only"
-    if ! [[ $address =~ ^[1-9][0-9]?$ ]] || ((10#$address < ADDRESS_MIN || 10#$address > ADDRESS_MAX)); then
-      die "$table: $name's address '$address' is outside FRC's range for on-robot devices, $ADDRESS_MIN to $ADDRESS_MAX (no leading zeros)"
-    fi
-    is_board "$board" || die "$table: $name's board (image.board) '$board' isn't one of: $RECIPE_BOARDS"
-    [[ -z $port ]] || is_port "$port" || die "$table: $name's agentPort '$port' isn't a port (1 to 65535)"
-    kind=$(yq -r ".computers[$i].cameras | tag" "$table")
-    if [[ $kind != '!!null' ]]; then
-      [[ $kind == '!!seq' ]] || die "$table: $name's cameras must be a list of names"
-      cameras=$(yq -r "[.computers[$i].cameras[] | select(tag == \"!!map\" or tag == \"!!seq\" or tag == \"!!null\" or (tostring | test(\"^\$|/\")) or (tostring | length) > 64)] | length" "$table")
-      ((cameras == 0)) || die "$table: $name's cameras must each be a name: not empty, no '/', at most 64 characters"
-    fi
-    [[ -z ${names[$name]:-} ]] || die "$table: two computers are named $name"
-    names[$name]=1
-    [[ -z ${addresses[$((10#$address))]:-} ]] ||
-      die "$table: two computers have the address $((10#$address)) ($name and ${addresses[$((10#$address))]})"
-    addresses[$((10#$address))]=$name
-  done
+
+  kind=$(yq -r '.computers | tag' "$config")
+  if [[ $kind != '!!seq' ]]; then
+    problems+=("computers must be a list of computers, each a hostname, address, and board")
+  else
+    n=$(yq -r '.computers | length' "$config")
+    ((n > 0)) || problems+=("computers lists none: list each computer")
+    for ((i = 0; i < n; i++)); do
+      what="computers[$i]"
+      if [[ $(yq -r ".computers[$i] | tag" "$config") != '!!map' ]]; then
+        problems+=("$what must be a computer: its hostname, address, and board")
+        continue
+      fi
+      config_keys ".computers[$i]" "hostname address board" "$what"
+      hostname=$(scalar ".computers[$i].hostname")
+      address=$(scalar ".computers[$i].address")
+      board=$(scalar ".computers[$i].board")
+      if [[ -z $hostname ]]; then
+        problems+=("$what has no hostname")
+      elif ! is_hostname "$hostname"; then
+        problems+=("$what: '$hostname' can't be a hostname: lowercase letters, digits, and hyphens, starting and ending with a letter or digit")
+      else
+        what=$hostname
+        [[ -z ${hostnames[$hostname]:-} ]] || problems+=("two computers have the hostname $hostname")
+        hostnames[$hostname]=1
+      fi
+      if [[ -z $address ]]; then
+        problems+=("$what has no address (the last number of 10.TE.AM.x, $ADDRESS_MIN to $ADDRESS_MAX)")
+      elif ! [[ $(yq -r ".computers[$i].address | tag" "$config") == '!!int' && $address =~ ^[1-9][0-9]?$ ]] ||
+        ((10#$address < ADDRESS_MIN || 10#$address > ADDRESS_MAX)); then
+        problems+=("$what's address '$address' is outside FRC's range for on-robot devices, $ADDRESS_MIN to $ADDRESS_MAX (the last number of 10.TE.AM.x, no leading zeros)")
+      elif [[ -n ${addresses[$address]:-} ]]; then
+        problems+=("two computers have the address $address (${addresses[$address]} and $what)")
+      else
+        addresses[$address]=$what
+      fi
+      if [[ -z $board ]]; then
+        problems+=("$what has no board (one of: $RECIPE_BOARDS)")
+      elif ! is_board "$board"; then
+        problems+=("$what's board '$board' isn't one of the recipe's: $RECIPE_BOARDS")
+      fi
+    done
+  fi
+
+  kind=$(yq -r '.packages | tag' "$config")
+  if [[ $kind == '!!seq' ]]; then
+    n=$(yq -r '.packages | length' "$config")
+    for ((i = 0; i < n; i++)); do
+      what="packages[$i]"
+      if [[ $(yq -r ".packages[$i] | tag" "$config") != '!!map' ]]; then
+        problems+=("$what must be a package: its url and sha256")
+        continue
+      fi
+      config_keys ".packages[$i]" "url sha256" "$what"
+      url=$(scalar ".packages[$i].url")
+      if ! [[ $url =~ ^https://[A-Za-z0-9:/._~%+-]+\.deb$ ]]; then
+        problems+=("$what: url '$url' isn't the https:// address of a .deb")
+      elif [[ -n ${urls[$url]:-} ]]; then
+        problems+=("$what: $url is listed twice")
+      else
+        urls[$url]=1
+      fi
+      is_sha256 "$(scalar ".packages[$i].sha256")" ||
+        problems+=("$what: sha256 '$(scalar ".packages[$i].sha256")' isn't a SHA-256 (64 lowercase hex digits)")
+    done
+  elif [[ $kind != '!!null' ]]; then
+    problems+=("packages must be a list of packages, each a url and sha256")
+  fi
+
+  kind=$(yq -r '.files | tag' "$config")
+  if [[ $kind == '!!seq' ]]; then
+    n=$(yq -r '.files | length' "$config")
+    for ((i = 0; i < n; i++)); do
+      what="files[$i]"
+      if [[ $(yq -r ".files[$i] | tag" "$config") != '!!map' ]]; then
+        problems+=("$what must be a file: its path, destination, and mode")
+        continue
+      fi
+      config_keys ".files[$i]" "path destination mode" "$what"
+      path=$(scalar ".files[$i].path")
+      destination=$(scalar ".files[$i].destination")
+      mode=$(scalar ".files[$i].mode")
+      if ! is_relative_path "$path"; then
+        problems+=("$what: path '$path' isn't a path in the team's repository, from its root (no leading '/', no '..')")
+      elif [[ -n $repo ]]; then
+        # A file of the repository's own: not a link, which could reach outside it.
+        if [[ ! -f $repo/$path || -L $repo/$path ]] ||
+          [[ $(realpath -e "$repo/$path") != "$(realpath -e "$repo")"/* ]]; then
+          problems+=("$what: $path isn't a file in the team's repository")
+        fi
+      fi
+      if ! is_image_path "$destination"; then
+        problems+=("$what: destination '$destination' isn't a path in the image, from its root (such as /etc/team/settings.yaml)")
+      elif [[ $destination == "$IMG_DATA" || $destination == "$IMG_DATA"/* ]]; then
+        problems+=("$what: destination $destination is on the data partition, which stamping fills: give a place on the root")
+      elif [[ " $IMG_STAMPED " == *" $destination "* ]]; then
+        problems+=("$what: destination $destination is written at stamping, with the computer's identity")
+      elif [[ -n ${destinations[$destination]:-} ]]; then
+        problems+=("$what: two files have the destination $destination")
+      else
+        destinations[$destination]=1
+      fi
+      [[ $(yq -r ".files[$i].mode | tag" "$config") =~ ^!!(int|str)$ && $mode =~ ^0?[0-7]{3}$ ]] ||
+        problems+=("$what: mode '$mode' isn't a file's mode in octal, such as \"0644\"")
+    done
+  elif [[ $kind != '!!null' ]]; then
+    problems+=("files must be a list of files, each a path, destination, and mode")
+  fi
+
+  if ((${#problems[@]})); then
+    printf -v value '\n  - %s' "${problems[@]}"
+    die "$config has ${#problems[@]} problem$( ((${#problems[@]} == 1)) || echo s):$value"
+  fi
 }

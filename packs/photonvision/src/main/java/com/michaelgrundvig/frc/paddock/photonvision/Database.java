@@ -1,11 +1,11 @@
 package com.michaelgrundvig.frc.paddock.photonvision;
 
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonException;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import com.michaelgrundvig.frc.paddock.settings.SettingsDatabase;
 import com.michaelgrundvig.frc.paddock.settings.SettingsException;
 import com.michaelgrundvig.frc.paddock.settings.SettingsText;
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonException;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -21,7 +21,7 @@ import java.util.Optional;
 import org.sqlite.SQLiteConfig;
 
 /**
- * PhotonVision's settings database, read the only way this pack reads it: read-only, in one
+ * PhotonVision's settings database, read the only way the helper reads it: read-only, in one
  * transaction (so PhotonVision's writes wait milliseconds at most), and bounded as it's read, not
  * after. A hostile or broken database can't make the helper hold a huge value, run anything, or
  * read past its bounds; past one, it's refused, saying which.

@@ -19,12 +19,11 @@ nullaway = { module = "com.uber.nullaway:nullaway", version.ref = "nullaway" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
-# SQLite: PhotonVision's settings database, which its pack's helper reads, and its tests.
+# SQLite: PhotonVision's settings database, which the settings tool writes, and its tests.
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
-# The container tests: the agent in a container, with Toxiproxy between it and the robot.
+# The container tests: PhotonVision in a container under systemd.
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-core = { module = "org.testcontainers:testcontainers" }
-testcontainers-toxiproxy = { module = "org.testcontainers:testcontainers-toxiproxy" }
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

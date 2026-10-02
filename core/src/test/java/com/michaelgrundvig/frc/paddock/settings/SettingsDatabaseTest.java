@@ -3,7 +3,7 @@ package com.michaelgrundvig.frc.paddock.settings;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;

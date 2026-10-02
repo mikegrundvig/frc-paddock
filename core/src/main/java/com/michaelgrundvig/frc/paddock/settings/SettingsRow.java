@@ -1,8 +1,8 @@
 package com.michaelgrundvig.frc.paddock.settings;
 
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonException;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonException;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import java.util.LinkedHashMap;
 import java.util.Map;
 

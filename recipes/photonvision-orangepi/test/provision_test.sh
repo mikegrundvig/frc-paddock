@@ -57,7 +57,7 @@ test_provision_turns_off_photonvisions_network_management() {
   assert_contains "$dropin" 'ExecStart=/usr/bin/java -Xmx512m -jar /opt/photonvision/photonvision.jar -n'
   assert_contains "$dropin" 'RequiresMountsFor=/opt/photonvision/photonvision_config'
   assert_eq "$(grep -c '^ExecStart=$' "$dropin")" 1 "ExecStart resets"
-  # Soft-off waits for PhotonVision to stop, so its stop is bounded.
+  # A power-off waits for PhotonVision to stop, so its stop is bounded.
   grep -qx 'TimeoutStopSec=15s' "$dropin" || fail "PhotonVision's stop isn't bounded"
   cmp -s "$TMP/root/opt/photonvision/photonvision.jar" "$TMP/inputs/photonvision.jar" || fail "the jar wasn't installed"
 }
@@ -206,27 +206,22 @@ test_provision_masks_rsyslog_and_the_clock_save() {
   done
 }
 
-test_provision_sandboxes_the_facts_helper() {
-  setup_provision
-  run_provision
-  local unit=$TMP/root/etc/systemd/system/coprocessor-facts.service line
-  for line in ProtectSystem=strict RuntimeDirectory=coprocessor RuntimeDirectoryPreserve=yes \
-    PrivateNetwork=yes NoNewPrivileges=yes DevicePolicy=closed 'DeviceAllow=/dev/nvme0 r' \
-    'DeviceAllow=/dev/mtd0 r'; do
-    grep -qx "$line" "$unit" || fail "the facts helper's unit lacks $line"
-  done
-}
-
-
-test_provision_installs_spotters_agent_and_photonvisions_pack() {
+test_provision_installs_the_teams_packages_and_files() {
   setup_provision
   run_provision
   local root=$TMP/root
-  assert_file "$root/usr/lib/frc-spotter/frc-spotter.jar"
-  local wants=$root/etc/systemd/system/multi-user.target.wants
-  [[ -L $wants/frc-spotter.service ]] || fail "the agent isn't enabled"
-  local pack=$root/usr/lib/frc-spotter/packs/photonvision
-  assert_file "$pack/pack.json"
-  assert_mode "$pack/bin/photonvision-helper" 755
-  assert_file "$root/usr/share/polkit-1/rules.d/61-frc-spotter-photonvision.rules"
+  assert_mode "$root/usr/bin/example-tool" 755
+  assert_file "$root/usr/lib/systemd/system/example-tool.service"
+  assert_eq "$(cat "$root/etc/example/packs/example.yaml")" "checks: [example]"
+  assert_mode "$root/etc/example/packs/example.yaml" 600
+  assert_mode "$root/opt/team/check.sh" 755
+}
+
+test_provision_needs_the_teams_software_even_if_none() {
+  setup_provision
+  assert_fails "--packages and --files are required" \
+    "$RECIPE/provision.sh" --board orangepi-5 --target "$TMP/root" --offline --inputs "$TMP/inputs"
+  rm "$TMP/packages"/*.deb
+  : >"$TMP/software/files/files.list"
+  run_provision
 }

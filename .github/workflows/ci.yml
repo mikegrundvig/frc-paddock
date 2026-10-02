@@ -1,11 +1,10 @@
 name: CI
 
 # Runs ./gradlew ci, the same command anyone runs before pushing: formatting, static analysis,
-# the tests (with the container tests: PhotonVision's pack against the real PhotonVision, on
-# Spotter's harness), the engine's and the recipes' tests, and coverage. Spotter's source, at the
-# version spotter.lock pins, is checked out beside Paddock's for the build. Then, on main, it builds
-# the fixture team's image end to end with the image workflow (fixtures/), as a team's repository
-# would, keeping it as an artifact.
+# the tests (with the container tests: the real PhotonVision under systemd, set up as an image runs
+# it), the engine's and the recipes' tests, and coverage. Then, on main, it builds the fixture
+# team's image end to end with the image workflow (fixtures/), as a team's repository would,
+# keeping it as an artifact.
 on:
   push:
     branches: [main]
@@ -31,17 +30,8 @@ jobs:
         with:
           path: frc-paddock
           persist-credentials: false
-      - name: Read Spotter's version
-        id: spotter
-        run: echo "tag=$(yq -p json -r '.tag' frc-paddock/spotter.lock)" >>"$GITHUB_OUTPUT"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: mikegrundvig/frc-spotter
-          ref: ${{ steps.spotter.outputs.tag }}
-          path: frc-spotter
-          persist-credentials: false
-      # The engine's tests: the layout ones need sfdisk and mkfs.fat; yq, node, dpkg-deb, and
-      # systemctl come with the runner.
+      # The engine's tests: the layout ones need sfdisk and mkfs.fat; yq, dpkg-deb, and systemctl
+      # come with the runner.
       - name: Tools for the engine's tests
         run: |
           sudo apt-get update --quiet
@@ -89,7 +79,7 @@ jobs:
     permissions:
       contents: write
     with:
-      table: fixtures/team/coprocessors.yaml
+      config: fixtures/team/paddock.yaml
       settings: fixtures/team/settings
       ssh-keys: fixtures/team/authorized_keys
       paddock-ref: ${{ github.sha }}

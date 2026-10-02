@@ -23,7 +23,7 @@ test_stamp_builds_the_settings_database_from_the_committed_rows() {
   local expected
   expected=$(cd "$TMP/team/settings/vision-front" && find . -type f -print0 | LC_ALL=C sort -z |
     xargs -0 cat | sha256sum | cut -c1-64)
-  assert_eq "$(yq -r '.labels.settingsHash' "$TMP/out/root/etc/coprocessor/stamp.json")" "$expected"
+  assert_eq "$(yq -r '.labels.settingsHash' "$TMP/out/coproc/stamp.json")" "$expected"
   assert_mode "$TMP/out/data/photonvision_config" 755
 }
 
@@ -37,7 +37,7 @@ test_stamp_without_settings_leaves_photonvision_its_defaults() {
   # Neither the tool nor the empty database is needed then.
   rm -rf "$TMP/out" "$TMP/inputs"
   run_stamp vision-back
-  assert_eq "$(yq -r '.labels.settingsHash' "$TMP/out/root/etc/coprocessor/stamp.json")" ""
+  assert_eq "$(yq -r '.labels.settingsHash' "$TMP/out/coproc/stamp.json")" ""
 }
 
 test_stamp_needs_the_settings_tool_for_committed_settings() {
@@ -62,7 +62,7 @@ test_stamp_takes_the_settings_tools_last_line_as_the_hash() {
   local output
   output=$(run_stamp vision-front 2>&1)
   [[ $output == *"also said: [0.002s][warning]"* ]] || fail "the extra line wasn't passed on: $output"
-  [[ $(yq -r '.labels.settingsHash' "$TMP/out/root/etc/coprocessor/stamp.json") =~ ^[0-9a-f]{64}$ ]] ||
+  [[ $(yq -r '.labels.settingsHash' "$TMP/out/coproc/stamp.json") =~ ^[0-9a-f]{64}$ ]] ||
     fail "settingsHash isn't the tool's hash"
 }
 

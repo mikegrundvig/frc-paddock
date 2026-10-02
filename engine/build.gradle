@@ -1,6 +1,7 @@
-// The engine's and the recipes' scripts are shell, so their tests are too (engine/test/run.sh). They need bash and yq (mikefarah's, version 4): Linux CI has both, and a
-// Windows laptop rarely does. So ci runs them wherever bash and yq are found, says so when it skips
-// them, and in CI on Linux (CI=true) runs every one or fails: no test may skip there.
+// The engine's and the recipes' scripts are shell, so their tests are too (engine/test/run.sh).
+// They need bash and yq (mikefarah's, version 4): Linux CI has both, and a Windows laptop rarely
+// does. So ci runs them wherever bash and yq are found, says so when it skips them, and in CI on
+// Linux (CI=true) runs every one or fails: no test may skip there.
 
 def engineTests = tasks.register("engineTest") {
     group = "verification"
@@ -9,7 +10,6 @@ def engineTests = tasks.register("engineTest") {
     def imageDir = projectDir
     inputs.files(fileTree(imageDir) { exclude "build/**" }).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(rootProject.fileTree("recipes")).withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.files(rootProject.fileTree("packs/photonvision/package")).withPathSensitivity(PathSensitivity.RELATIVE)
     def marker = layout.buildDirectory.file("engine-test/passed")
     outputs.file(marker)
     def os = System.getProperty("os.name").toLowerCase()

@@ -4,7 +4,7 @@
 #   layout.sh --recipe-dir DIR --board BOARD IMAGE.img
 #
 # The drive then holds, in order: the read-only root (the board's base image's own partition); COPROC,
-# a small FAT partition for a copy of the stamp, which Windows can open; and the data partition
+# a small FAT partition for the stamp record, which Windows can open; and the data partition
 # (ext4, about 8 GB), everything written while the computer runs. The rest of the drive stays
 # unpartitioned, so nothing is resized at first boot. The recipe's provision.sh writes the matching
 # /etc/fstab, by label.

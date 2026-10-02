@@ -12,19 +12,13 @@ plugins {
 
 rootProject.name = "frc-paddock"
 
-// Spotter, from its source beside this repository (../frc-spotter, or -PspotterBuild=DIR): its
-// API, the agent's package, and its container harness, by their coordinates
-// (com.michaelgrundvig.frc.spotter:api, :harness). The images themselves install Spotter's released
-// .deb, pinned in spotter.lock. Released artifacts will replace this source build.
-includeBuild(providers.gradleProperty("spotterBuild").orElse("../frc-spotter").get())
-
-// PhotonVision's settings in their canonical form, the AprilTag layout's fingerprint, the locks, the
-// recipe hash, and Paddock's build tool.
+// PhotonVision's settings in their canonical form, the AprilTag layout's fingerprint, PhotonVision's
+// lock, Paddock's build tool, and their JSON.
 include "core"
-// PhotonVision's pack: its definitions, and the helper they name.
+// PhotonVision's settings tool, which stamping runs.
 include "photonvision-pack"
 project(":photonvision-pack").projectDir = file("packs/photonvision")
 // The shared machinery and the recipes (shell): their tests, run by Gradle.
 include "engine"
-// The container tests: PhotonVision's pack against the real PhotonVision, on Spotter's harness.
+// The container tests: the real PhotonVision under systemd, set up as an image runs it.
 include "harness"

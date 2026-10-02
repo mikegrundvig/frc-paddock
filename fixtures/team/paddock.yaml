@@ -1,0 +1,19 @@
+# Paddock's input for its own CI: one computer on one board, built with PhotonVision's recipe.
+# Team 9971's addresses (10.99.71.x) are unlikely on any network.
+#
+# What the image gets is someone else's software, as any team's would be: Spotter's agent, as its
+# v0.3.0 release publishes it (the sha256 from the release's SHA256SUMS), and Spotter's
+# PhotonVision pack, copied from its catalog at v0.3.0 (packs/photonvision.yaml). Paddock knows
+# nothing of either: a package is a URL and a checksum, and a file is a file.
+team: 9971
+computers:
+  - hostname: vision-front
+    address: 11
+    board: orangepi-5
+packages:
+  - url: https://github.com/mikegrundvig/frc-spotter/releases/download/v0.3.0/frc-spotter_0.3.0_arm64.deb
+    sha256: 3f50c797acca36e1907c35b6989ebbdff7e57030baf0e19e8f74e2457f9350f9
+files:
+  - path: fixtures/team/packs/photonvision.yaml
+    destination: /etc/frc-spotter/packs/photonvision.yaml
+    mode: "0644"

@@ -1,5 +1,7 @@
 package com.michaelgrundvig.frc.paddock.photonvision;
 
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import com.michaelgrundvig.frc.paddock.layout.LayoutFingerprint;
 import com.michaelgrundvig.frc.paddock.settings.Settings;
 import com.michaelgrundvig.frc.paddock.settings.SettingsDatabase;
@@ -7,8 +9,6 @@ import com.michaelgrundvig.frc.paddock.settings.SettingsException;
 import com.michaelgrundvig.frc.paddock.settings.SettingsFiles;
 import com.michaelgrundvig.frc.paddock.settings.SettingsRow;
 import com.michaelgrundvig.frc.paddock.settings.SettingsText;
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
 import java.io.BufferedWriter;
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -33,9 +33,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * PhotonVision's pack helper: the one program the pack's definitions name, each use a fixed command
- * line (docs/photonvision-pack.md). It reads what the agent itself mustn't (PhotonVision's SQLite
- * database, its jar) with the code the robot's build uses, so the two never disagree:
+ * PhotonVision's helper, each use a fixed command line (docs/photonvision-settings.md). It reads
+ * PhotonVision's SQLite database and its jar with the code the robot's build uses, so the two never
+ * disagree:
  *
  * <ul>
  *   <li>{@code version JAR}: PhotonVision's version, as its jar says it (its {@code

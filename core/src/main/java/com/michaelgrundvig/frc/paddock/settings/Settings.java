@@ -1,7 +1,7 @@
 package com.michaelgrundvig.frc.paddock.settings;
 
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

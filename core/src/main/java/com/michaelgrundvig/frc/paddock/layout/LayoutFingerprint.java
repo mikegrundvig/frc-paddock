@@ -1,8 +1,8 @@
 package com.michaelgrundvig.frc.paddock.layout;
 
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonException;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonException;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,7 +16,7 @@ import java.util.Set;
 
 /**
  * Which AprilTag layout a coprocessor holds, as one short hash: the robot computes it from the
- * layout it uses, a coprocessor's pack from the layout its vision software stored, and the two are
+ * layout it uses, Paddock's tools from the layout its vision software stored, and the two are
  * compared. A layout pushed to a coprocessor that didn't take (or one left from another venue) then
  * shows as a mismatch, without sending the layout itself back and forth.
  *

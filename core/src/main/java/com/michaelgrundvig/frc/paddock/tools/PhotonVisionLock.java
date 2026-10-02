@@ -1,9 +1,9 @@
 package com.michaelgrundvig.frc.paddock.tools;
 
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonException;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import com.michaelgrundvig.frc.paddock.table.Board;
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonException;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;

@@ -1,7 +1,7 @@
 // Paddock's shared code: PhotonVision's settings in their canonical form and their hash, the
-// AprilTag layout's fingerprint, the locks, the recipe hash, the boards, the table's PhotonVision
-// rules, and Paddock's build tool. Plain Java 17 on Spotter's API, so PhotonVision's pack's helper,
-// a robot's build, and the image workflow all compute these one way.
+// AprilTag layout's fingerprint, PhotonVision's lock, the boards, Paddock's build tool, and the JSON
+// they're all written in. Plain Java 17 with no dependencies, so the settings tool, a robot's
+// build, and a laptop's tools all compute these one way.
 
 plugins {
     id "java-library"
@@ -17,7 +17,7 @@ java {
     }
 }
 
-// Java 17 bytecode and APIs, as Spotter's: the pack's helper runs on a board's Java.
+// Java 17 bytecode and APIs: a robot program, a laptop, or a board may run it on its own Java.
 tasks.withType(JavaCompile).configureEach {
     options.release = 17
 }
@@ -27,14 +27,14 @@ repositories {
 }
 
 dependencies {
-    api "com.michaelgrundvig.frc.spotter:api:${rootProject.spotterVersion}"
+    api libs.jspecify // @Nullable in the signatures
 
     errorprone libs.errorprone.core
     errorprone libs.nullaway
 
     // PhotonVision's settings database for tests (src/testFixtures): this project's, and the
-    // pack's. Settings go in and out of the database through JDBC's own API (java.sql), so only
-    // the tests need a driver; the pack's helper brings its own.
+    // settings tool's. Settings go in and out of the database through JDBC's own API (java.sql),
+    // so only the tests need a driver; the settings tool brings its own.
     testFixturesRuntimeOnly libs.sqlite.jdbc
 
     testImplementation platform(libs.junit.bom)
@@ -47,17 +47,6 @@ tasks.named("test") {
     useJUnitPlatform()
     jvmArgs "--enable-native-access=ALL-UNNAMED" // sqlite-jdbc loads its native library
     systemProperty "frc.projectDir", rootProject.projectDir.absolutePath
-}
-
-// The build tools the image workflow runs, with java -cp 'build/tools/*': Spotter's
-// (com.michaelgrundvig.frc.spotter.tools.CoprocessorBuild: agent-configs, pack) and Paddock's
-// (com.michaelgrundvig.frc.paddock.tools.PaddockBuild).
-tasks.register("workflowTools", Sync) {
-    group = "build"
-    description = "Collect the build tools' jars for the image workflow, in build/tools."
-    into layout.buildDirectory.dir("tools")
-    from(tasks.named("jar"))
-    from(configurations.runtimeClasspath)
 }
 
 ext.nullSafePackages = "com.michaelgrundvig.frc.paddock"

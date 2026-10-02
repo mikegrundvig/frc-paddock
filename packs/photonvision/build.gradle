@@ -1,10 +1,10 @@
-// PhotonVision's pack (docs/photonvision-pack.md): its definitions (pack.yaml), and its helper, a
-// small program the definitions name, built from Paddock's core so a robot's build and the
-// coprocessor hash PhotonVision's settings, and fingerprint its tag layout, one way. The helper reads
-// a SQLite database (java.sql), so it runs on the board's own Java, which PhotonVision needs anyway:
-// Java 17 bytecode.
+// PhotonVision's settings tool: built from Paddock's core so a robot's build and an image's stamp
+// hash PhotonVision's settings, and fingerprint its tag layout, one way. Stamping runs it as
+// `photonvision-helper.jar settings-db` to build each computer's settings database from its
+// committed settings. It reads and writes a SQLite database (java.sql) with its own driver: Java 17
+// bytecode, so it runs on any Java from 17.
 //
-//   ./gradlew :photonvision-pack:packFolder    the pack as installed: build/pack/photonvision/
+//   ./gradlew :photonvision-pack:jar    build/libs/photonvision-helper.jar
 
 plugins {
     id "java"
@@ -19,7 +19,7 @@ java {
     }
 }
 
-// Java 17 bytecode and APIs, as Spotter's agent's.
+// Java 17 bytecode and APIs.
 tasks.withType(JavaCompile).configureEach {
     options.release = 17
 }
@@ -49,7 +49,7 @@ tasks.named("test") {
     jvmArgs "--enable-native-access=ALL-UNNAMED" // sqlite-jdbc loads its native library
 }
 
-// photonvision-helper.jar: the helper with everything it needs, run with `java -jar`. sqlite-jdbc's
+// photonvision-helper.jar: the tool with everything it needs, run with `java -jar`. sqlite-jdbc's
 // native libraries are kept for 64-bit ARM and x86 Linux, and no others: a fifth of the size.
 def keptNatives = [
     "org/sqlite/native/Linux/aarch64",
@@ -73,55 +73,6 @@ tasks.named("jar") {
         }
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-// The pack's definitions, checked and written as the agent reads them (pack.json), by the shared
-// Spotter's build tool.
-def packJson = tasks.register("packJson", JavaExec) {
-    description = "Check pack.yaml and write it as pack.json."
-    classpath = configurations.runtimeClasspath
-    mainClass = "com.michaelgrundvig.frc.spotter.tools.CoprocessorBuild"
-    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    def source = file("pack.yaml")
-    def out = layout.buildDirectory.file("pack-json/pack.json")
-    inputs.file(source)
-    outputs.file(out)
-    args "pack", source.absolutePath, out.get().asFile.absolutePath
-}
-
-// The pack as it's installed (/usr/lib/frc-spotter/packs/photonvision/): its definitions, its
-// helper and the helper's launcher, its polkit rule, and the script that installs it.
-def packFolderTask = tasks.register("packFolder", Sync) {
-    group = "build"
-    description = "Assemble PhotonVision's pack as installed, in build/pack/photonvision."
-    into layout.buildDirectory.dir("pack/photonvision")
-    from(packJson)
-    from(tasks.named("jar")) { into "lib" }
-    from("package") {
-        exclude "launcher/**", "install.sh", "*.md"
-        filePermissions { unix("0644") }
-    }
-    // The launcher's source folder isn't named bin/, which Git ignores (an IDE's output).
-    from("package/launcher") {
-        into "bin"
-        filePermissions { unix("0755") }
-    }
-    from("package/install.sh") {
-        filePermissions {
-            unix("0755")
-        }
-    }
-}
-
-configurations {
-    // The pack as installed, for the container tests and the image builder.
-    packFolder {
-        canBeConsumed = true
-        canBeResolved = false
-    }
-}
-artifacts {
-    add("packFolder", packFolderTask.map { it.destinationDir }) { builtBy packFolderTask }
 }
 
 ext.nullSafePackages = "com.michaelgrundvig.frc.paddock"

@@ -1,7 +1,7 @@
 package com.michaelgrundvig.frc.paddock.settings;
 
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.json.JsonValue;
+import com.michaelgrundvig.frc.paddock.json.Json;
+import com.michaelgrundvig.frc.paddock.json.JsonValue;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +17,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The hash of a set of settings: what the robot's build compiles in for each computer's committed
- * settings, and what each agent computes from PhotonVision's live database, so the robot can say
- * when they differ.
+ * settings, and what's computed from the settings PhotonVision holds, so the robot can say when
+ * they differ.
  *
  * <p>It's the SHA-256, in lowercase hex, of {@link Json#hashable} (sorted, no spaces, every number
  * in one form) of

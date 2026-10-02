@@ -3,12 +3,11 @@ package com.michaelgrundvig.frc.paddock.tools;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.michaelgrundvig.frc.paddock.json.Json;
 import com.michaelgrundvig.frc.paddock.settings.Settings;
 import com.michaelgrundvig.frc.paddock.settings.SettingsFiles;
 import com.michaelgrundvig.frc.paddock.settings.SettingsRow;
 import com.michaelgrundvig.frc.paddock.table.Board;
-import com.michaelgrundvig.frc.spotter.json.Json;
-import com.michaelgrundvig.frc.spotter.table.CompiledTable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -22,12 +21,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Paddock's build tasks, on a team's repository made for each test, with Paddock's own pack. */
+/** Paddock's build tasks, on a team's repository made for each test. */
 class PaddockBuildTest {
   static final String VERSION = "v2027.0.0-alpha-2";
   static final String SHA = "edf2bda3032579d759de46aab0e8094cfd3de3586ba764b663470d2b80351cb7";
 
-  /** Paddock's repository, whose PhotonVision pack the robot's build compiles. */
+  /** Paddock's repository, whose recipe's lock is checked. */
   static final Path PROJECT = Path.of(System.getProperty("frc.projectDir", "../.."));
 
   @TempDir Path root;
@@ -65,22 +64,6 @@ class PaddockBuildTest {
   void aRepository() throws IOException {
     write("vendordeps/photonlib.json", "{\"name\":\"photonlib\",\"version\":\"" + VERSION + "\"}");
     write("photonvision.lock", lock(VERSION, "PLACEHOLDER: not archived yet"));
-    write(
-        "coprocessors/coprocessors.yaml",
-        """
-        team: 1234
-        computers:
-          - name: vision-front
-            address: 11
-            cameras: [front-left]
-            packs: [photonvision]
-            image:
-              board: orangepi-5
-          - name: vision-back
-            address: 12
-            image:
-              board: orangepi-5-plus
-        """);
   }
 
   @Test
@@ -151,59 +134,6 @@ class PaddockBuildTest {
   @Test
   void theRecipesLockIsComplete() throws IOException {
     assertThat(PaddockBuild.checkLock(PROJECT.resolve(PhotonVisionLock.PATH), null)).isEmpty();
-  }
-
-  @Test
-  void theTableIsCompiledWithPhotonVisionsPackAndTheLocksVersion() throws IOException {
-    Path out = root.resolve("build/table.json");
-    int status =
-        PaddockBuild.run(
-            new String[] {
-              "table",
-              "--packs",
-              PROJECT.resolve("packs").toString(),
-              root.toString(),
-              root.resolve("photonvision.lock").toString(),
-              out.toString()
-            },
-            System.out,
-            System.err);
-    assertThat(status).isZero();
-    CompiledTable compiled = CompiledTable.parse(Files.readString(out));
-    assertThat(compiled.labels()).containsExactly(Map.entry("photonvisionVersion", VERSION));
-    assertThat(compiled.probeSet(compiled.table().computers().get(0)).packs())
-        .containsExactly("builtin", "photonvision");
-  }
-
-  @Test
-  void aTableBreakingPaddocksRulesFailsTheBuild() throws IOException {
-    write(
-        "coprocessors/coprocessors.yaml",
-        """
-        team: 1234
-        agentPort: 5800
-        computers:
-          - name: vision-front
-            address: 11
-            cameras: [front/left, shared]
-            image:
-              board: raspberry-pi-5
-          - name: vision-back
-            address: 12
-            cameras: [shared]
-            agentPort: 1183
-        """);
-    assertThatThrownBy(
-            () ->
-                PaddockBuild.compile(
-                    root, List.of(PROJECT.resolve("packs")), root.resolve("photonvision.lock")))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("agentPort 5800 is taken: PhotonVision's page uses it")
-        .hasMessageContaining("vision-front's board \"raspberry-pi-5\" isn't one of")
-        .hasMessageContaining("camera \"front/left\" has a '/'")
-        .hasMessageContaining("vision-back has no board")
-        .hasMessageContaining("vision-back's agentPort 1183 is taken")
-        .hasMessageContaining("camera shared is listed by vision-front and vision-back");
   }
 
   @Test
