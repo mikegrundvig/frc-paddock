@@ -2,9 +2,9 @@
 # provision.sh: makes PhotonVision's image for a board into the common coprocessor image. The
 # recipe's step the engine runs once per board (../README.md, "What a recipe provides").
 #
-# Runs as root inside a chroot of PhotonVision's official image for the board. In CI that's
-# PhotonVision's photon-image-runner, which bind-mounts the build's folder at /tmp/build and runs
-# from there. Safe to rerun: every step sets a state (writes a whole file, masks a unit, replaces
+# Runs as root inside a chroot of PhotonVision's official image for the board: the engine's
+# chroot-provision.sh makes it, with the build's folder bind-mounted at /tmp/build, where this
+# runs. Safe to rerun: every step sets a state (writes a whole file, masks a unit, replaces
 # its own block of /etc/fstab) rather than adding to one.
 #
 # In order, it:

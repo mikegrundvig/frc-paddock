@@ -20,7 +20,7 @@
 # Then it prints, as name=value lines (appended to $GITHUB_OUTPUT in Actions): team, recipe,
 # runner (the recipe's runner), version, version-label, recipe-hash, release, publish (whether
 # --release was given: without one, the images are built under a name made from the commit, and
-# not released), boards (a JSON list: board, url, sha256, rootLocation, minimumFreeMb), and
+# not released), boards (a JSON list: board, url, sha256, minimumFreeMb), and
 # computers (a JSON list: name, board).
 set -euo pipefail
 
@@ -91,9 +91,9 @@ for board in $(yq -r '[.computers[].image.board] | unique | .[]' "$table"); do
   [[ ${url##*/} == "$BOARD_BASE_ASSET" ]] ||
     die "$RECIPE_LOCK: $board's base image is ${url##*/}, but $BOARD_TITLE's is $BOARD_BASE_ASSET"
   boards+=("$(
-    BOARD=$board URL=$url SUM=$sum ROOT=$BOARD_ROOT_LOCATION FREE=$BOARD_MINIMUM_FREE_MB \
+    BOARD=$board URL=$url SUM=$sum FREE=$BOARD_MINIMUM_FREE_MB \
       yq -n -o=json -I=0 '{"board": strenv(BOARD), "url": strenv(URL), "sha256": strenv(SUM),
-        "rootLocation": strenv(ROOT), "minimumFreeMb": env(FREE)}'
+        "minimumFreeMb": env(FREE)}'
   )")
 done
 boards_json="[$(IFS=,; echo "${boards[*]}")]"

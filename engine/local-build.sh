@@ -92,35 +92,6 @@ cp "$team/$table" "$work/repository/coprocessors/coprocessors.yaml"
 java -cp "$root/core/build/tools/*" com.michaelgrundvig.frc.spotter.tools.CoprocessorBuild \
   agent-configs "$work/repository" "$work/tools/agent-configs"
 
-mnt="" loop=""
-# Unmounts the chroot and detaches the image. Fails, saying what's left, if it can't: the next
-# step would otherwise work on an image that's still mounted.
-cleanup() {
-  local status=0
-  if [[ -n $mnt ]]; then
-    if [[ -e $mnt/etc/resolv.conf.coproc-saved ]]; then
-      mv -f "$mnt/etc/resolv.conf.coproc-saved" "$mnt/etc/resolv.conf" || status=1
-    fi
-    if mountpoint -q "$mnt"; then
-      umount --recursive "$mnt" || { say "couldn't unmount $mnt"; status=1; }
-    fi
-    if ((status == 0)); then
-      rmdir "$mnt" || status=1
-    fi
-  fi
-  if [[ -n $loop ]] && ((status == 0)); then
-    losetup --detach "$loop" || { say "couldn't detach $loop"; status=1; }
-  fi
-  if ((status == 0)); then
-    mnt="" loop=""
-  fi
-  return "$status"
-}
-on_exit() {
-  cleanup || say "left mounted: ${mnt:-nothing}; attached: ${loop:-nothing}. Unmount by hand before rerunning"
-}
-trap on_exit EXIT
-
 board_list=""
 while IFS= read -r row <&3; do
   board=$(yq -p json -o yaml -r '.board' <<<"$row")
@@ -132,46 +103,18 @@ while IFS= read -r row <&3; do
   common="$out/common-$board.img"
   say "$board: the common image"
   xz -dc "$inputs/base.img.xz" >"$common"
-  # The root grown by the headroom the recipe's board file gives it.
-  truncate -s "+$(yq -p json -o yaml -r '.minimumFreeMb' <<<"$row")M" "$common"
-  if [[ $(sfdisk --dump "$common" | sed -n 's/^label: *//p') == gpt ]]; then
-    sfdisk --quiet --relocate gpt-bak-std "$common"
-  fi
-  echo ', +' | sfdisk --quiet --no-reread --no-tell-kernel -N "$BOARD_ROOT_PARTITION" "$common"
-  loop=$(losetup --find --show --partscan "$common")
-  root_dev="${loop}p$BOARD_ROOT_PARTITION"
-  e2fsck -pf "$root_dev"
-  resize2fs "$root_dev"
-  # A chroot of the image's root, as photon-image-runner makes one: Paddock at /tmp/build.
-  mnt=$(mktemp -d)
-  mount "$root_dev" "$mnt"
-  mount -t proc proc "$mnt/proc"
-  mount -t sysfs sys "$mnt/sys"
-  mount --rbind /dev "$mnt/dev"
-  # So unmounting the chroot's /dev never reaches the machine's own.
-  mount --make-rslave "$mnt/dev"
-  mount -t tmpfs tmpfs "$mnt/run"
-  mkdir -p "$mnt/tmp/build"
-  mount --bind "$root" "$mnt/tmp/build"
-  mv -f "$mnt/etc/resolv.conf" "$mnt/etc/resolv.conf.coproc-saved"
-  cp /etc/resolv.conf "$mnt/etc/resolv.conf"
   rel_inputs=${inputs#"$root"/}
   [[ $rel_inputs != "$inputs" ]] || die "--out must be inside Paddock's folder, which the chroot sees"
-  pack_args=""
-  for pack in "$work"/tools/packs/*/; do pack_args+=" --pack build/local-work/tools/packs/$(basename "$pack")"; done
-  hook_args=""
-  if [[ -f $work/tools/hook.sh ]]; then hook_args="--hook build/local-work/tools/hook.sh"; fi
-  # shellcheck disable=SC2086 # the packs and the hook are words, by design
-  chroot "$mnt" bash -c "cd /tmp/build && bash recipes/$recipe/provision.sh --board $board \
-    --inputs $rel_inputs/inputs --agent-deb $rel_inputs/inputs/frc-coprocessor-agent.deb \
-    $pack_args $hook_args --out build/local-work/smoketest-$board"
+  args=(--board "$board" --inputs "$rel_inputs/inputs" --agent-deb "$rel_inputs/inputs/frc-coprocessor-agent.deb"
+    --out "build/local-work/smoketest-$board")
+  for pack in "$work"/tools/packs/*/; do args+=(--pack "build/local-work/tools/packs/$(basename "$pack")"); done
+  if [[ -f $work/tools/hook.sh ]]; then args+=(--hook build/local-work/tools/hook.sh); fi
+  "$here/chroot-provision.sh" --image "$common" --root-partition "$BOARD_ROOT_PARTITION" \
+    --grow-mb "$(yq -p json -o yaml -r '.minimumFreeMb' <<<"$row")" --bind "$root" -- \
+    bash "recipes/$recipe/provision.sh" "${args[@]}"
   if [[ -f $work/smoketest-$board/photonvision_config/photon.sqlite ]]; then
     cp "$work/smoketest-$board/photonvision_config/photon.sqlite" "$out/empty-photon-$board.sqlite"
   fi
-  # Zeros where nothing is, so the image compresses as CI's does.
-  cat /dev/zero >"$mnt/coproc-zeros" 2>/dev/null || true
-  rm -f "$mnt/coproc-zeros"
-  cleanup || die "couldn't unmount $board's common image: stopping"
 done 3< <(yq -p json -o=json -I=0 '.[]' <<<"$boards")
 
 mkdir -p "$out/release"

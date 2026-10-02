@@ -29,6 +29,3 @@ Paddock builds:
   recipe (`recipes/<name>/notice.sh`), naming the exact PhotonVision version and each base image,
   with links to their source at those versions. A team that passes its images on, as anyone who
   flashes them for another team does, offers that source by passing on the notice with them.
-- **The image workflow** runs PhotonVision's
-  [photon-image-runner](https://github.com/PhotonVision/photon-image-runner) action (MIT) to
-  provision each common image in a chroot of its base image.

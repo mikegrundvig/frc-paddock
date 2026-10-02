@@ -33,7 +33,6 @@ test_plan_lists_the_boards_and_computers_to_build() {
   output boards >"$TMP/boards.json"
   assert_eq "$(yq -p json -o yaml -r '.[].board' "$TMP/boards.json" | paste -sd ' ')" "orangepi-5 orangepi-5-plus"
   assert_eq "$(yq -p json -o yaml -r '.[0].sha256' "$TMP/boards.json")" edf2bda3032579d759de46aab0e8094cfd3de3586ba764b663470d2b80351cb7
-  assert_eq "$(yq -p json -o yaml -r '.[0].rootLocation' "$TMP/boards.json")" partition=1
   assert_eq "$(yq -p json -o yaml -r '.[1].minimumFreeMb' "$TMP/boards.json")" 1024
 }
 
