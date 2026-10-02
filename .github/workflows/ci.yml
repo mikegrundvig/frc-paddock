@@ -49,7 +49,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Formatting, static analysis, tests, coverage, container tests
         working-directory: frc-paddock
-        run: ./gradlew ci
+        run: |
+          set -o pipefail
+          if ! ./gradlew ci 2>&1 | tee "$RUNNER_TEMP/ci.log"; then
+            # What failed, as an annotation beside the run, where it's read without the full log.
+            grep -E -A15 "What went wrong|FAILED|^FAIL |^    FAILED" "$RUNNER_TEMP/ci.log" | head -80 |
+              python3 -c 'import sys; t=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=gradlew ci::"+t)'
+            exit 1
+          fi
       - name: Upload reports
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
