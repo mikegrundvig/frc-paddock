@@ -1,0 +1,74 @@
+name: CI
+
+# Runs ./gradlew ci, the same command anyone runs before pushing: formatting, static analysis,
+# the tests (with the container tests: PhotonVision's pack against the real PhotonVision, on
+# Spotter's harness), the engine's and the recipes' tests, and coverage. Spotter's source, at the
+# version spotter.lock pins, is checked out beside Paddock's for the build. Then, on main, it builds
+# the fixture team's image end to end with the image workflow (fixtures/), as a team's repository
+# would, keeping it as an artifact.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Build, check, test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # Actions are pinned to a commit (the version beside it), so a moved tag can't change what
+      # runs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: frc-paddock
+          persist-credentials: false
+      - name: Read Spotter's version
+        id: spotter
+        run: echo "tag=$(yq -p json -r '.tag' frc-paddock/spotter.lock)" >>"$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: mikegrundvig/frc-spotter
+          ref: ${{ steps.spotter.outputs.tag }}
+          path: frc-spotter
+          persist-credentials: false
+      # The engine's tests: the layout ones need sfdisk and mkfs.fat; yq, node, dpkg-deb, and
+      # systemctl come with the runner.
+      - name: Tools for the engine's tests
+        run: |
+          sudo apt-get update --quiet
+          sudo apt-get install --yes --quiet --no-install-recommends fdisk dosfstools
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Formatting, static analysis, tests, coverage, container tests
+        working-directory: frc-paddock
+        run: ./gradlew ci
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reports-${{ github.sha }}
+          path: |
+            frc-paddock/*/build/reports/
+            frc-paddock/*/build/test-results/
+            frc-paddock/packs/*/build/reports/
+            frc-paddock/packs/*/build/test-results/
+          if-no-files-found: warn
+
+  images:
+    name: The fixture team's image, end to end
+    needs: ci
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/build-images.yml
+    with:
+      table: fixtures/team/coprocessors.yaml
+      settings: fixtures/team/settings
+      ssh-keys: fixtures/team/authorized_keys
+      paddock-ref: ${{ github.sha }}

@@ -1,0 +1,10 @@
+# A team's table for Paddock's own CI: one computer, one board, PhotonVision's recipe. Team 9971's
+# addresses (10.99.71.x) are unlikely on any network.
+team: 9971
+computers:
+  - name: vision-front
+    address: 11
+    cameras: [front-left]
+    packs: [photonvision]
+    image:
+      board: orangepi-5
