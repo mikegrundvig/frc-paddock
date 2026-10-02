@@ -9,7 +9,7 @@ setup_fetch() {
   mkdir -p "$TMP/served" "$TMP/bin"
   echo 'base image' >"$TMP/served/photonvision_opi5.img.xz"
   echo 'the jar' >"$TMP/served/photonvision.jar"
-  echo 'the agent' >"$TMP/served/frc-coprocessor-agent_0.1.0_arm64.deb"
+  echo 'the agent' >"$TMP/served/frc-spotter_0.1.0_arm64.deb"
   local lock=$TMP/paddock/recipes/photonvision-orangepi/photonvision.lock
   python3 - "$lock" "$TMP/paddock/spotter.lock" "$TMP/served" <<'PY'
 import hashlib, json, sys
@@ -22,7 +22,7 @@ l["jar"] = pin("photonvision.jar")
 l["images"]["orangepi-5"] = pin("photonvision_opi5.img.xz")
 json.dump(l, open(lock, "w"))
 s = json.load(open(spotter))
-s["debs"]["arm64"] = pin("frc-coprocessor-agent_0.1.0_arm64.deb")
+s["debs"]["arm64"] = pin("frc-spotter_0.1.0_arm64.deb")
 json.dump(s, open(spotter, "w"))
 PY
   # curl --output FILE URL: copies the served file of the URL's name, or fails as a 404 would.
@@ -52,7 +52,7 @@ test_fetch_downloads_every_input_checked() {
   run_fetch
   assert_eq "$(cat "$TMP/out/base.img.xz")" "base image"
   assert_eq "$(cat "$TMP/out/inputs/photonvision.jar")" "the jar"
-  assert_eq "$(cat "$TMP/out/inputs/frc-coprocessor-agent.deb")" "the agent"
+  assert_eq "$(cat "$TMP/out/inputs/frc-spotter.deb")" "the agent"
   # A second run finds them already here, checked.
   rm "$TMP/served/photonvision.jar"
   run_fetch 2>"$TMP/second.log"
@@ -68,6 +68,6 @@ test_fetch_refuses_a_download_that_isnt_the_locks() {
 
 test_fetch_says_where_spotters_agent_must_come_from() {
   setup_fetch
-  rm "$TMP/served/frc-coprocessor-agent_0.1.0_arm64.deb"
+  rm "$TMP/served/frc-spotter_0.1.0_arm64.deb"
   assert_fails "Spotter's release must be public" run_fetch --no-image
 }

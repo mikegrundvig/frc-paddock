@@ -7,7 +7,7 @@
 #   fetch.sh --recipe-dir DIR --board BOARD --spotter-lock FILE --out DIR [--no-image]
 #
 # Writes OUT/base.img.xz (unless --no-image), and OUT/inputs/: each input by its name, and
-# frc-coprocessor-agent.deb. Needs curl, sha256sum, and python3, which reads the locks (JSON): it
+# frc-spotter.deb. Needs curl, sha256sum, and python3, which reads the locks (JSON): it
 # runs on the recipe's runner, which may have no yq.
 set -euo pipefail
 
@@ -77,6 +77,6 @@ for input in $RECIPE_INPUTS; do
 done
 url=$(json_get "$spotter_lock" debs "$RECIPE_ARCH" url)
 sum=$(json_get "$spotter_lock" debs "$RECIPE_ARCH" sha256)
-fetch "Spotter's agent ($RECIPE_ARCH)" "$url" "$sum" "$out/inputs/frc-coprocessor-agent.deb" \
+fetch "Spotter's agent ($RECIPE_ARCH)" "$url" "$sum" "$out/inputs/frc-spotter.deb" \
   "Spotter's release must be public, and hold this version (spotter.lock)"
 say "fetched what $board's common image is built from, into $out"

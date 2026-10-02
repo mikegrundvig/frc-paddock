@@ -65,7 +65,7 @@ final class PhotonVisionImages {
         COPY pack /tmp/pack
         RUN sh /tmp/pack/install.sh && rm -rf /tmp/pack
         COPY stamp.json /etc/coprocessor/stamp.json
-        RUN mkdir -p /data/frc-coprocessor
+        RUN mkdir -p /data/frc-spotter
         VOLUME /data
         """
             .formatted(PHOTONVISION_JAVA, Images.base(), installAgent),

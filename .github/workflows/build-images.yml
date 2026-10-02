@@ -210,7 +210,7 @@ jobs:
           rm "$WORK/inputs/base.img.xz"
           partition=$(. "paddock/recipes/$RECIPE/boards/$BOARD.env" && echo "$BOARD_ROOT_PARTITION")
           args=(--board "$BOARD" --inputs "$WORK/inputs/inputs"
-            --agent-deb "$WORK/inputs/inputs/frc-coprocessor-agent.deb" --out "$WORK/smoketest")
+            --agent-deb "$WORK/inputs/inputs/frc-spotter.deb" --out "$WORK/smoketest")
           for pack in "$WORK"/tools/packs/*/; do args+=(--pack "${pack%/}"); done
           if [ -f "$WORK/tools/hook.sh" ]; then args+=(--hook "$WORK/tools/hook.sh"); fi
           sudo paddock/engine/chroot-provision.sh --image "$WORK/common.img" \

@@ -105,7 +105,7 @@ while IFS= read -r row <&3; do
   xz -dc "$inputs/base.img.xz" >"$common"
   rel_inputs=${inputs#"$root"/}
   [[ $rel_inputs != "$inputs" ]] || die "--out must be inside Paddock's folder, which the chroot sees"
-  args=(--board "$board" --inputs "$rel_inputs/inputs" --agent-deb "$rel_inputs/inputs/frc-coprocessor-agent.deb"
+  args=(--board "$board" --inputs "$rel_inputs/inputs" --agent-deb "$rel_inputs/inputs/frc-spotter.deb"
     --out "build/local-work/smoketest-$board")
   for pack in "$work"/tools/packs/*/; do args+=(--pack "build/local-work/tools/packs/$(basename "$pack")"); done
   if [[ -f $work/tools/hook.sh ]]; then args+=(--hook build/local-work/tools/hook.sh); fi

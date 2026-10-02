@@ -219,9 +219,9 @@ test_stamp_refuses_another_yq() {
 test_stamp_writes_the_agents_configuration() {
   setup_stamp
   run_stamp vision-front
-  cmp -s "$TMP/out/root/etc/frc-coprocessor/agent.json" "$TMP/agent-configs/vision-front.json" ||
+  cmp -s "$TMP/out/root/etc/frc-spotter/agent.json" "$TMP/agent-configs/vision-front.json" ||
     fail "the agent's configuration wasn't written"
-  assert_mode "$TMP/out/root/etc/frc-coprocessor/agent.json" 644
+  assert_mode "$TMP/out/root/etc/frc-spotter/agent.json" 644
 }
 
 test_stamp_refuses_another_computers_agent_configuration() {

@@ -13,7 +13,7 @@ version over HTTP), its settings' hash, its AprilTag layout's fingerprint, and e
 camera at the USB port PhotonVision's settings match it by. Before a power-off, it stops
 PhotonVision (`systemctl stop photonvision.service`, so it saves its settings), and it serves the
 settings as `settings.json` and `settings.zip` downloads. Its polkit rule
-(`61-frc-coprocessor-photonvision.rules`) lets the agent's account stop and restart
+(`61-frc-spotter-photonvision.rules`) lets the agent's account stop and restart
 `photonvision.service`, and nothing more.
 
 **Its helper**, `bin/photonvision-helper`, is its one program: `photonvision-helper.jar`, built

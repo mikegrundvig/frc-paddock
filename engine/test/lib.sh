@@ -235,26 +235,26 @@ EOF
 
 # The agent's package as built (agent/build.gradle's agentPackage), but for its jar and runtime:
 # its real launcher, polkit rules, sysusers file, and maintainer scripts, and its unit from
-# $TMP/agent-unit (the real one, copied there first), into $TMP/frc-coprocessor-agent.deb. A test
+# $TMP/agent-unit (the real one, copied there first), into $TMP/frc-spotter.deb. A test
 # that changes $TMP/agent-unit packs it again by calling this again.
 make_agent_deb() {
   local agent=$SPOTTER/agent/package pkg=$TMP/agent-package
   [[ -d $agent ]] || skip "needs Spotter's checkout at $SPOTTER (its agent's package files)"
   need dpkg-deb
   rm -rf "$pkg"
-  mkdir -p "$pkg/DEBIAN" "$pkg/usr/lib/frc-coprocessor-agent/bin" "$pkg/usr/lib/systemd/system" \
+  mkdir -p "$pkg/DEBIAN" "$pkg/usr/lib/frc-spotter/bin" "$pkg/usr/lib/systemd/system" \
     "$pkg/usr/lib/sysusers.d" "$pkg/usr/share/polkit-1/rules.d" \
-    "$pkg/usr/lib/frc-coprocessor/packs/builtin"
-  [[ -f $TMP/agent-unit ]] || cp "$agent/frc-coprocessor-agent.service" "$TMP/agent-unit"
-  echo 'agent jar' >"$pkg/usr/lib/frc-coprocessor-agent/frc-coprocessor-agent.jar"
-  install -m 0755 "$agent/launcher/frc-coprocessor-agent" "$pkg/usr/lib/frc-coprocessor-agent/bin/"
-  cp "$TMP/agent-unit" "$pkg/usr/lib/systemd/system/frc-coprocessor-agent.service"
-  cp "$agent/frc-coprocessor-agent.sysusers" "$pkg/usr/lib/sysusers.d/frc-coprocessor-agent.conf"
+    "$pkg/usr/lib/frc-spotter/packs/builtin"
+  [[ -f $TMP/agent-unit ]] || cp "$agent/frc-spotter.service" "$TMP/agent-unit"
+  echo 'agent jar' >"$pkg/usr/lib/frc-spotter/frc-spotter.jar"
+  install -m 0755 "$agent/launcher/frc-spotter" "$pkg/usr/lib/frc-spotter/bin/"
+  cp "$TMP/agent-unit" "$pkg/usr/lib/systemd/system/frc-spotter.service"
+  cp "$agent/frc-spotter.sysusers" "$pkg/usr/lib/sysusers.d/frc-spotter.conf"
   cp "$agent"/*.rules "$pkg/usr/share/polkit-1/rules.d/"
-  echo '{"pack": "builtin"}' >"$pkg/usr/lib/frc-coprocessor/packs/builtin/pack.json"
+  echo '{"pack": "builtin"}' >"$pkg/usr/lib/frc-spotter/packs/builtin/pack.json"
   install -m 0755 "$agent/debian/postinst" "$agent/debian/prerm" "$agent/debian/postrm" "$pkg/DEBIAN/"
   sed 's/@VERSION@/0.1.0/; s/@ARCH@/arm64/; s/@SIZE@/1/' "$agent/debian/control.in" >"$pkg/DEBIAN/control"
-  dpkg-deb --root-owner-group --build "$pkg" "$TMP/frc-coprocessor-agent.deb" >/dev/null
+  dpkg-deb --root-owner-group --build "$pkg" "$TMP/frc-spotter.deb" >/dev/null
 }
 
 # PhotonVision's pack as built (:photonvision-pack:packFolder), but for its helper's jar.
@@ -271,6 +271,6 @@ make_photonvision_pack() {
 # Runs the recipe's provision.sh on make_image_root's tree, offline, with any extra options.
 run_provision() {
   "$RECIPE/provision.sh" --board orangepi-5 --target "$TMP/root" --offline \
-    --inputs "$TMP/inputs" --agent-deb "$TMP/frc-coprocessor-agent.deb" \
+    --inputs "$TMP/inputs" --agent-deb "$TMP/frc-spotter.deb" \
     --pack "$TMP/photonvision-pack" "$@"
 }

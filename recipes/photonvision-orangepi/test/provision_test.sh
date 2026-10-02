@@ -222,11 +222,11 @@ test_provision_installs_spotters_agent_and_photonvisions_pack() {
   setup_provision
   run_provision
   local root=$TMP/root
-  assert_file "$root/usr/lib/frc-coprocessor-agent/frc-coprocessor-agent.jar"
+  assert_file "$root/usr/lib/frc-spotter/frc-spotter.jar"
   local wants=$root/etc/systemd/system/multi-user.target.wants
-  [[ -L $wants/frc-coprocessor-agent.service ]] || fail "the agent isn't enabled"
-  local pack=$root/usr/lib/frc-coprocessor/packs/photonvision
+  [[ -L $wants/frc-spotter.service ]] || fail "the agent isn't enabled"
+  local pack=$root/usr/lib/frc-spotter/packs/photonvision
   assert_file "$pack/pack.json"
   assert_mode "$pack/bin/photonvision-helper" 755
-  assert_file "$root/usr/share/polkit-1/rules.d/61-frc-coprocessor-photonvision.rules"
+  assert_file "$root/usr/share/polkit-1/rules.d/61-frc-spotter-photonvision.rules"
 }

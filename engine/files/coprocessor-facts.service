@@ -1,6 +1,6 @@
 [Unit]
 Description=Write the drive's health and the SPI bootloader's version for Spotter's agent
-Before=frc-coprocessor-agent.service
+Before=frc-spotter.service
 
 [Service]
 Type=oneshot

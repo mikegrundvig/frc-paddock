@@ -19,11 +19,11 @@ IMG_DATA=/data
 IMG_STAMP=/etc/coprocessor/stamp.json
 IMG_JOURNAL=/var/log/journal
 # Spotter's agent, as its package installs it, and its configuration, as stamping writes it.
-IMG_AGENT_UNIT=/usr/lib/systemd/system/frc-coprocessor-agent.service
-IMG_AGENT_CONFIG=/etc/frc-coprocessor/agent.json
+IMG_AGENT_UNIT=/usr/lib/systemd/system/frc-spotter.service
+IMG_AGENT_CONFIG=/etc/frc-spotter/agent.json
 # The account the agent runs as: its unit's User=. Its package's polkit rule lets this account, and
 # no other, power the board off; a pack's lets it do what that pack's steps need.
-IMG_AGENT_USER=frc-coprocessor-agent
+IMG_AGENT_USER=frc-spotter
 IMG_CONNECTION=/etc/NetworkManager/system-connections/robot.nmconnection
 # On /data.
 DATA_JOURNAL=journal

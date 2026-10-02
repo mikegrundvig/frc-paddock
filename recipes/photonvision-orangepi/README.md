@@ -49,7 +49,7 @@ lock: PhotonVision's "offline update" can't replace its jar.
 `.6` to `.19`: [IP Configurations](https://docs.wpilib.org/en/latest/docs/networking/networking-introduction/ip-configurations.html));
 `/etc/hosts` naming every computer in the table; a machine ID; the team's SSH public keys
 (`authorized_keys`, if the team's repository has one); Spotter's agent's configuration
-(`/etc/frc-coprocessor/agent.json`); and `/etc/coprocessor/stamp.json`, Spotter's stamp:
+(`/etc/frc-spotter/agent.json`); and `/etc/coprocessor/stamp.json`, Spotter's stamp:
 
 ```json
 {
@@ -94,7 +94,7 @@ public); stamping drops each key's comment, which is often a name or an email ad
 password manager records where the private key lives. Each drive makes its own SSH host key on
 `/data` at first boot.
 
-**Soft-off.** The coprocessor agent runs unprivileged, never as root, as `frc-coprocessor-agent`.
+**Soft-off.** The coprocessor agent runs unprivileged, never as root, as `frc-spotter`.
 Its package's polkit rule lets that account power the board off, also while someone is logged in
 over SSH; PhotonVision's pack's rule lets it stop and restart `photonvision.service` (its step
 before a power-off, so the settings are saved); the package's last rule refuses it everything

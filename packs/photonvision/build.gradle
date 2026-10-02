@@ -89,7 +89,7 @@ def packJson = tasks.register("packJson", JavaExec) {
     args "pack", source.absolutePath, out.get().asFile.absolutePath
 }
 
-// The pack as it's installed (/usr/lib/frc-coprocessor/packs/photonvision/): its definitions, its
+// The pack as it's installed (/usr/lib/frc-spotter/packs/photonvision/): its definitions, its
 // helper and the helper's launcher, its polkit rule, and the script that installs it.
 def packFolderTask = tasks.register("packFolder", Sync) {
     group = "build"

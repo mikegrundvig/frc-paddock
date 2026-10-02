@@ -10,7 +10,7 @@ setup_install() {
 }
 
 run_install() {
-  "$ENGINE/install-spotter.sh" --root "$TMP/root" --offline --deb "$TMP/frc-coprocessor-agent.deb" \
+  "$ENGINE/install-spotter.sh" --root "$TMP/root" --offline --deb "$TMP/frc-spotter.deb" \
     --pack "$TMP/photonvision-pack" "$@"
 }
 
@@ -18,19 +18,19 @@ test_install_puts_the_agent_and_packs_in_place() {
   setup_install
   run_install
   local root=$TMP/root
-  assert_file "$root/usr/lib/frc-coprocessor-agent/frc-coprocessor-agent.jar"
-  assert_mode "$root/usr/lib/frc-coprocessor-agent/bin/frc-coprocessor-agent" 755
-  cmp -s "$root/usr/lib/systemd/system/frc-coprocessor-agent.service" "$TMP/agent-unit" ||
+  assert_file "$root/usr/lib/frc-spotter/frc-spotter.jar"
+  assert_mode "$root/usr/lib/frc-spotter/bin/frc-spotter" 755
+  cmp -s "$root/usr/lib/systemd/system/frc-spotter.service" "$TMP/agent-unit" ||
     fail "the agent's unit wasn't installed"
-  assert_file "$root/usr/lib/sysusers.d/frc-coprocessor-agent.conf"
+  assert_file "$root/usr/lib/sysusers.d/frc-spotter.conf"
   local wants=$root/etc/systemd/system/multi-user.target.wants
-  [[ -L $wants/frc-coprocessor-agent.service ]] || fail "the agent isn't enabled"
+  [[ -L $wants/frc-spotter.service ]] || fail "the agent isn't enabled"
   # PhotonVision's pack, where the agent reads its packs, with its polkit rule.
-  local pack=$root/usr/lib/frc-coprocessor/packs/photonvision
+  local pack=$root/usr/lib/frc-spotter/packs/photonvision
   assert_file "$pack/pack.json"
   assert_mode "$pack/bin/photonvision-helper" 755
   assert_file "$pack/lib/photonvision-helper.jar"
-  assert_file "$root/usr/share/polkit-1/rules.d/61-frc-coprocessor-photonvision.rules"
+  assert_file "$root/usr/share/polkit-1/rules.d/61-frc-spotter-photonvision.rules"
   [[ -L $wants/coprocessor-facts.service ]] || fail "the facts helper isn't enabled"
   [[ -L $root/etc/systemd/system/timers.target.wants/coprocessor-facts.timer ]] ||
     fail "the facts timer isn't enabled"
@@ -49,9 +49,9 @@ test_install_refuses_an_agent_that_would_run_as_root() {
 
 test_install_refuses_an_agent_account_its_polkit_rules_dont_name() {
   setup_install
-  sed -i 's/^User=frc-coprocessor-agent$/User=someone-else/' "$TMP/agent-unit"
+  sed -i 's/^User=frc-spotter$/User=someone-else/' "$TMP/agent-unit"
   make_agent_deb
-  assert_fails "but its polkit rules are for 'frc-coprocessor-agent'" run_install
+  assert_fails "but its polkit rules are for 'frc-spotter'" run_install
 }
 
 # The rules, the agent package's and PhotonVision's pack's, run in order as polkit runs them,
@@ -80,7 +80,7 @@ const ask = (user, id, details) => {
   }
   return "null";
 };
-const agent = "frc-coprocessor-agent";
+const agent = "frc-spotter";
 const cases = [
   [agent, "org.freedesktop.login1.power-off", {}, "yes"],
   [agent, "org.freedesktop.login1.power-off-multiple-sessions", {}, "yes"],
@@ -130,12 +130,12 @@ test_install_puts_a_team_pack_without_an_install_script_in_place() {
   echo 'pack: lidar' >"$TMP/lidar/pack.yaml"
   printf '#!/bin/sh\necho ok\n' >"$TMP/lidar/bin/lidar-check"
   chmod 755 "$TMP/lidar/bin/lidar-check"
-  echo '// the lidar pack' >"$TMP/lidar/62-frc-coprocessor-lidar.rules"
+  echo '// the lidar pack' >"$TMP/lidar/62-frc-spotter-lidar.rules"
   run_install --pack "$TMP/lidar"
-  local pack=$TMP/root/usr/lib/frc-coprocessor/packs/lidar
+  local pack=$TMP/root/usr/lib/frc-spotter/packs/lidar
   assert_file "$pack/pack.json"
   assert_mode "$pack/bin/lidar-check" 755
   assert_no_file "$pack/pack.yaml"
-  assert_no_file "$pack/62-frc-coprocessor-lidar.rules"
-  assert_file "$TMP/root/usr/share/polkit-1/rules.d/62-frc-coprocessor-lidar.rules"
+  assert_no_file "$pack/62-frc-spotter-lidar.rules"
+  assert_file "$TMP/root/usr/share/polkit-1/rules.d/62-frc-spotter-lidar.rules"
 }

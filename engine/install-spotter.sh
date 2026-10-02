@@ -7,7 +7,7 @@
 #   --deb      the agent's package for the image's architecture, as Spotter releases it
 #              (spotter.lock pins it; the engine's fetch.sh downloads and checks it)
 #   --pack     a pack's folder as built, with its pack.json: its install.sh installs it, when it has
-#              one; else the folder goes to /usr/lib/frc-coprocessor/packs/<name>/ as it is, and
+#              one; else the folder goes to /usr/lib/frc-spotter/packs/<name>/ as it is, and
 #              its *.rules files to polkit's rules (a team's pack, say)
 #   --root     the image's root (/ in its chroot, as provisioning runs it)
 #   --offline  for the tests, on a directory tree: the package is unpacked with dpkg-deb and its
@@ -89,7 +89,7 @@ for pack in "${packs[@]}"; do
   # pack.json as Spotter's build tool writes it (Json.pretty): its name a top-level member.
   name=$(sed -n 's/^  "pack": *"\([a-z0-9-]*\)".*/\1/p' "$pack/pack.json" | head -n 1)
   [[ -n $name ]] || die "$pack/pack.json names no pack"
-  dest=$(t "/usr/lib/frc-coprocessor/packs/$name")
+  dest=$(t "/usr/lib/frc-spotter/packs/$name")
   rm -rf "$dest"
   mkdir -p "$dest"
   (cd "$pack" && find . -type f ! -name '*.rules' ! -name 'pack.yaml' -print0 |
