@@ -67,6 +67,9 @@ jobs:
     needs: ci
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/build-images.yml
+    # The workflow's release job asks for it; with no release name, it publishes nothing.
+    permissions:
+      contents: write
     with:
       table: fixtures/team/coprocessors.yaml
       settings: fixtures/team/settings
