@@ -41,8 +41,10 @@ final class Images {
          && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \\
               systemd systemd-sysv dbus curl ca-certificates \\
          && apt-get clean && rm -rf /var/lib/apt/lists/*
-        # A board's image starts nothing it doesn't need; neither does this.
-        RUN systemctl mask getty@.service console-getty.service systemd-firstboot.service
+        # A board's image starts nothing it doesn't need; neither does this. A container loads no
+        # kernel modules of its own: Docker's privileged mode would let it try, and fail.
+        RUN systemctl mask getty@.service console-getty.service systemd-firstboot.service \\
+              systemd-modules-load.service
         STOPSIGNAL SIGRTMIN+3
         ENTRYPOINT ["/sbin/init"]
         """
