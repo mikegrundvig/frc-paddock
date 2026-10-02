@@ -121,7 +121,9 @@ jobs:
           if [[ -n $PACKS ]]; then
             for pack in "team/$PACKS"/*/; do args+=(--pack "${pack%/}"); done
           fi
-          paddock/engine/plan.sh "${args[@]}"
+          mkdir -p "$WORK"
+          set -o pipefail
+          paddock/engine/plan.sh "${args[@]}" 2>&1 | tee -a "$WORK/job.log"
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       # The tools the other jobs need, in one artifact: PhotonVision's pack and its helper (the
       # settings tool), the team's packs with their pack.json, its hook, and each computer's agent
@@ -132,7 +134,8 @@ jobs:
           PACKS: ${{ inputs.packs }}
           HOOK: ${{ inputs.provision-hook }}
         run: |
-          (cd paddock && ./gradlew --no-configuration-cache :photonvision-pack:packFolder :core:workflowTools)
+          set -o pipefail
+          (cd paddock && ./gradlew :photonvision-pack:packFolder :core:workflowTools) 2>&1 | tee -a "$WORK/job.log"
           tools=$WORK/tools
           mkdir -p "$tools/packs" "$tools/agent-configs" "$WORK/repository/coprocessors"
           cp -R paddock/packs/photonvision/build/pack/photonvision "$tools/packs/"
@@ -150,6 +153,13 @@ jobs:
           java -cp 'paddock/core/build/tools/*' com.michaelgrundvig.frc.spotter.tools.CoprocessorBuild \
             agent-configs "$WORK/repository" "$tools/agent-configs"
           ls -R "$tools"
+      # Why it failed, as an annotation beside the run, where it's read without the full log.
+      - name: Say why it failed
+        if: failure()
+        run: |
+          if [ -f "$WORK/job.log" ]; then
+            tail -n 60 "$WORK/job.log" | python3 -c 'import sys; t=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=${{ github.job }}::"+t)'
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tools
@@ -182,8 +192,10 @@ jobs:
           RECIPE: ${{ needs.plan.outputs.recipe }}
           BOARD: ${{ matrix.board }}
         run: |
+          mkdir -p "$WORK"
+          set -o pipefail
           paddock/engine/fetch.sh --recipe-dir "paddock/recipes/$RECIPE" --board "$BOARD" \
-            --spotter-lock paddock/spotter.lock --out "$WORK/inputs"
+            --spotter-lock paddock/spotter.lock --out "$WORK/inputs" 2>&1 | tee -a "$WORK/job.log"
       # PhotonVision's own runner: it loop-mounts the image's root and runs the commands in a
       # chroot of it, with the workspace bind-mounted at /tmp/build. The recipe and the board were
       # checked by plan.sh; the packs and the hook are files of fixed names.
@@ -196,13 +208,14 @@ jobs:
           minimum_free_mb: ${{ matrix.minimumFreeMb }}
           shrink_image: "no"
           commands: |
-            set -e
+            set -e -o pipefail
             work=build/paddock
             args=(--board ${{ matrix.board }} --inputs "$work/inputs/inputs"
               --agent-deb "$work/inputs/inputs/frc-coprocessor-agent.deb" --out "$work/smoketest")
             for pack in "$work"/tools/packs/*/; do args+=(--pack "${pack%/}"); done
             if [ -f "$work/tools/hook.sh" ]; then args+=(--hook "$work/tools/hook.sh"); fi
-            bash paddock/recipes/${{ needs.plan.outputs.recipe }}/provision.sh "${args[@]}"
+            bash paddock/recipes/${{ needs.plan.outputs.recipe }}/provision.sh "${args[@]}" 2>&1 |
+              tee -a "$work/job.log"
       - name: Pack the common image and what stamping needs
         env:
           IMAGE: ${{ steps.provision.outputs.image }}
@@ -218,6 +231,13 @@ jobs:
               "$WORK/smoketest/photonvision_config/photon.sqlite" "$WORK/common/empty-photon.sqlite"
           fi
           sudo rm -f "$IMAGE"
+      # Why it failed, as an annotation beside the run, where it's read without the full log.
+      - name: Say why it failed
+        if: failure()
+        run: |
+          if [ -f "$WORK/job.log" ]; then
+            tail -n 60 "$WORK/job.log" | python3 -c 'import sys; t=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=${{ github.job }}::"+t)'
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: common-${{ matrix.board }}
@@ -268,6 +288,8 @@ jobs:
           SETTINGS: ${{ inputs.settings }}
           KEYS: ${{ inputs.ssh-keys }}
         run: |
+          mkdir -p "$WORK"
+          exec > >(tee -a "$WORK/job.log") 2>&1
           sudo apt-get update --quiet
           sudo apt-get install --yes --quiet --no-install-recommends fdisk dosfstools
           base="$TEAM-$NAME-$RELEASE"
@@ -295,6 +317,13 @@ jobs:
           sudo chown "$(id -u):$(id -g)" "$WORK/out/$base.stamp.json"
           xz -T0 -c "$WORK/$base.img" >"$WORK/out/$base.img.xz"
           rm "$WORK/$base.img"
+      # Why it failed, as an annotation beside the run, where it's read without the full log.
+      - name: Say why it failed
+        if: failure()
+        run: |
+          if [ -f "$WORK/job.log" ]; then
+            tail -n 60 "$WORK/job.log" | python3 -c 'import sys; t=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=${{ github.job }}::"+t)'
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: image-${{ matrix.name }}
@@ -327,6 +356,8 @@ jobs:
           RECIPE: ${{ needs.plan.outputs.recipe }}
           BOARDS: ${{ needs.plan.outputs.boards }}
         run: |
+          mkdir -p "$WORK"
+          exec > >(tee -a "$WORK/job.log") 2>&1
           boards=$(yq -p json -o yaml -r '.[].board' <<<"$BOARDS" | paste -sd ' ')
           "paddock/recipes/$RECIPE/notice.sh" --boards "$boards" --spotter-lock paddock/spotter.lock \
             >"$WORK/release/NOTICE.md"
@@ -372,3 +403,10 @@ jobs:
             --title "Coprocessor images $RELEASE" --notes-file "$WORK/notes.md" \
             "$WORK/release"/*.img.xz "$WORK/release/SHA256SUMS" "$WORK/release/manifest.json" \
             "$WORK/release/NOTICE.md"
+      # Why it failed, as an annotation beside the run, where it's read without the full log.
+      - name: Say why it failed
+        if: failure()
+        run: |
+          if [ -f "$WORK/job.log" ]; then
+            tail -n 60 "$WORK/job.log" | python3 -c 'import sys; t=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=${{ github.job }}::"+t)'
+          fi
