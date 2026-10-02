@@ -1,22 +1,22 @@
 # PhotonVision on Orange Pi
 
 The recipe for a vision coprocessor running PhotonVision on an Orange Pi 5-family board. It takes
-PhotonVision's official image for the board, adds a read-only root, a data partition, Spotter's
-agent, and PhotonVision's pack, and then Paddock's engine makes one copy per computer in the team's
-table, stamped with that computer's name, address, and committed settings. One GitHub Release of
-the team's repository holds every computer's image.
+PhotonVision's official image for the board, adds a read-only root, a data partition, and the
+team's packages and files, and then Paddock's engine makes one copy per computer in the team's
+input, stamped with that computer's hostname, address, and committed settings, and labelled. One
+GitHub Release of the team's repository holds every computer's image.
 
 So to change a coprocessor, change the team's repository and cut a release; to replace a broken
 one, flash its image from the release onto a drive. A drive knows which computer it is.
 
 | File | What it does |
 |---|---|
-| `recipe.env` | The recipe's facts: its boards, architecture and runner, lock, inputs, label, packs, SSH login |
+| `recipe.env` | The recipe's facts: its boards, architecture and runner, lock, inputs, label, SSH login |
 | `photonvision.lock` | PhotonVision's version and its arm64 jar, and each board's base image, by URL and SHA-256 |
 | `boards/*.env` | What differs per board |
-| `provision.sh` | Makes PhotonVision's image into the common image, in a chroot of it: installs the pinned jar, `nvme-cli` and `polkitd` at pinned versions, Spotter's agent and the packs (the engine's `install-spotter.sh`); the read-only root's `/etc/fstab`; the journal; the logins and SSH; Armbian's RAM logging, first-boot resize, and first-run tasks off, and rsyslog and fake-hwclock's saving; the team's hook. Runs PhotonVision's `--smoketest`, which leaves an empty settings database in that version's schema and PhotonVision's native libraries extracted in the image, then checks the result. Safe to rerun |
-| `stamp-data.sh` | Builds each computer's settings database from its committed settings, and labels its stamp with their hash |
-| `notice.sh` | The release's `NOTICE.md`: PhotonVision's version and each base image, with their source |
+| `provision.sh` | Makes PhotonVision's image into the common image, in a chroot of it: installs the pinned jar, `nvme-cli` at a pinned version, and the team's packages and files (the engine's `install-software.sh`); the read-only root's `/etc/fstab`; the journal; the logins and SSH; Armbian's RAM logging, first-boot resize, and first-run tasks off, and rsyslog and fake-hwclock's saving; the team's hook. Runs PhotonVision's `--smoketest`, which leaves an empty settings database in that version's schema and PhotonVision's native libraries extracted in the image, then checks the result. Safe to rerun |
+| `stamp-data.sh` | Builds each computer's settings database from its committed settings, and labels its image with their hash |
+| `notice.sh` | The release's `NOTICE.md`: PhotonVision's version and each base image, with their source, and the team's packages |
 | `files/` | The configuration and units `provision.sh` installs |
 | `bench-procedures.md` | The bench checks a new board, power setup, or release passes |
 | `test/` | Its tests, run with the engine's (`engine/test/run.sh`) |
@@ -33,7 +33,7 @@ their releases.
 
 | Partition | What | While running |
 |---|---|---|
-| 1, the root | PhotonVision's image for the board (Armbian), with PhotonVision pinned to the robot code's version, Spotter's agent, and this computer's identity | Read-only |
+| 1, the root | PhotonVision's image for the board (Armbian), with PhotonVision pinned to the robot code's version, the team's packages and files, and this computer's identity and labels | Read-only |
 | 2, `COPROC` | 32 MiB, FAT: `stamp.json` and `README.txt`, saying which computer the drive is. Windows can open it | Not mounted |
 | 3, `coproc-data` | 8 GiB, ext4: PhotonVision's whole config folder (`photon.sqlite`, logs, calibration images) and the journal. Checked at boot; on an error it turns read-only rather than spread the damage | Read-write |
 
@@ -47,30 +47,32 @@ lock: PhotonVision's "offline update" can't replace its jar.
 **Identity** (written at stamping, by the engine's `stamp.sh`): the hostname; the address, `10.TE.AM.<address>`, netmask
 `255.255.255.0`, gateway `10.TE.AM.4` (FRC's documented static range for on-robot devices is
 `.6` to `.19`: [IP Configurations](https://docs.wpilib.org/en/latest/docs/networking/networking-introduction/ip-configurations.html));
-`/etc/hosts` naming every computer in the table; a machine ID; the team's SSH public keys
-(`authorized_keys`, if the team's repository has one); Spotter's agent's configuration
-(`/etc/frc-spotter/agent.json`); and `/etc/coprocessor/stamp.json`, Spotter's stamp:
+`/etc/hosts` naming every computer in the input; a machine ID; the team's SSH public keys
+(`authorized_keys`, if the team's repository has one); and the image's labels in
+`/etc/os-release` (Debian's link to `/usr/lib/os-release`): `IMAGE_ID="paddock-photonvision-orangepi"`,
+`IMAGE_VERSION`, the release, and `PADDOCK_BOARD`, `PADDOCK_BUILT_AT`,
+`PADDOCK_PHOTONVISION_VERSION`, `PADDOCK_RECIPE`, `PADDOCK_RECIPE_HASH`, and
+`PADDOCK_SETTINGS_HASH`. The stamp record on `COPROC` says the same, for people:
 
 ```json
 {
-  "name": "vision-front",
+  "hostname": "vision-front",
   "team": 1234,
   "address": "10.12.34.11",
-  "version": "coprocessors-2027.1",
+  "release": "coprocessors-2027.1",
+  "recipe": "photonvision-orangepi",
   "recipeHash": "…",
   "builtAt": "2027-01-10T18:30:00Z",
   "labels": {
     "board": "orangepi-5",
     "photonvisionVersion": "v2027.0.0-alpha-2",
     "settingsHash": "…"
-  },
-  "agentPort": 5808
+  }
 }
 ```
 
-That's Spotter's `Stamp` (its `docs/agent.md`) less what the agent adds as it answers, plus the
-port it listens on; `version` is the release. A computer with no committed settings gets an empty
-`settingsHash`, and no settings database: PhotonVision starts with its defaults.
+A computer with no committed settings gets an empty settings hash, and no settings database:
+PhotonVision starts with its defaults.
 
 PhotonVision runs with `-n`, so it never changes the network: the address is the image's.
 
@@ -94,12 +96,10 @@ public); stamping drops each key's comment, which is often a name or an email ad
 password manager records where the private key lives. Each drive makes its own SSH host key on
 `/data` at first boot.
 
-**Soft-off.** The coprocessor agent runs unprivileged, never as root, as `frc-spotter`.
-Its package's polkit rule lets that account power the board off, also while someone is logged in
-over SSH; PhotonVision's pack's rule lets it stop and restart `photonvision.service` (its step
-before a power-off, so the settings are saved); the package's last rule refuses it everything
-else. Its `POST /v1/shutdown` is accepted only from the robot controller its configuration names
-(10.TE.AM.2).
+**Powering off.** `systemctl poweroff` stops every service in order and waits for each,
+PhotonVision included, which saves its settings as it stops. Its stop is bounded at 15 s (a
+drop-in for `photonvision.service`), where systemd's default would wait 90 s. Whatever asks for
+the power-off is the team's software, not Paddock's.
 
 ## Flashing from Windows
 
@@ -133,8 +133,8 @@ swap in that computer's pre-flashed spare instead.
 4. Put the drive in **that computer's** board, and only that one: two drives with one image would
    share an address. Label the drive with the computer and the release.
 
-After it boots, the computer answers at `http://10.TE.AM.<address>:5808/v1/stamp` (Spotter's
-agent) and PhotonVision at `http://10.TE.AM.<address>:5800`.
+After it boots, PhotonVision answers at `http://10.TE.AM.<address>:5800`, and
+`ssh photon@10.TE.AM.<address> cat /etc/os-release` shows the image's labels.
 
 The **Orange Pi 5B** has no M.2 slot: its image goes on the soldered eMMC, so there's no enclosure
 step, and its spare is a spare board. Orange Pi documents writing the eMMC with RKDevTool over USB
@@ -163,24 +163,22 @@ Two ways to install it:
   image includes it.
 
 Keep one spare board with its bootloader installed. A stale SPI bootloader is a known trap
-(PhotonVision's own image adds a tool to read its version: `sudo strings /dev/mtd0 | grep "^U-Boot"`),
-and Spotter's agent reports the version in SPI flash.
+(PhotonVision's own image adds a tool to read its version: `sudo strings /dev/mtd0 | grep "^U-Boot"`).
 
 ## What's unverified
 
 Nothing here has run on a board yet. The tests cover what
 runs without one: stamping, the layout, the plan, the manifest, `provision.sh`'s
 file changes and self-checks on a tree shaped like PhotonVision's image (its logins as that image
-ships them), and the soft-off rule, run under Node against the requests it must allow and refuse.
+ships them), and the pinned PhotonVision booting under systemd in a container with no unit failed.
 Still to check:
 - **PhotonVision starting on the read-only root:** its native libraries are extracted during the
   build's smoke test (`/root/.wpilib/nativecache`), and PhotonVision should load them from there
   without writing.
-- **The sandboxes:** the drive-health helper writing `/run/coprocessor` with only read access to
-  `/dev/nvme0` and `/dev/mtd0`; polkit applying the soft-off rule to the agent's account.
-- **Soft-off's timing:** PhotonVision's stop is bounded at 15 s (a drop-in for
-  `photonvision.service`), so the agent's "safe to switch off" comes quickly; bench test B3 checks
-  it stops well inside that.
+- **A power-off's timing:** PhotonVision's stop is bounded at 15 s (a drop-in for
+  `photonvision.service`); bench test B3 checks it stops well inside that.
+- **The team's packages on the read-only root:** each runs as its own package expects, with only
+  `/data`, `/tmp`, `/var/tmp`, `/var/log`, and systemd's and NetworkManager's state writable.
 
 - **Booting it:** from NVMe with the SPI bootloader, per board (`boards/*.env`, `BOARD_VERIFIED=no`);
   Armbian's boot with the root read-only; `/data` mounted, checked, and bind-mounted before

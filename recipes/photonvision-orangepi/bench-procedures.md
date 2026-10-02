@@ -20,20 +20,18 @@ are proposals: change them if your team decides on others, and write down why.
 - **A laptop on the coprocessor's network:** the robot's radio, or a switch with the laptop at a
   static address on the robot's subnet (`10.TE.AM.5`, netmask `255.255.255.0`, is the Driver
   Station's).
-- **Spotter's agent** at `http://10.TE.AM.<address>:5808/v1/health`: temperatures with their trip
-  points, core frequencies, PhotonVision's restarts, USB errors, the drive's health, and the boot
-  ID. Save what it says once a second for the whole run, with the laptop's time. In PowerShell
-  (the address yours):
+- **The computer's readings, once a second for the whole run**, with the laptop's time: the boot
+  ID and uptime, every thermal zone's temperature, the big cores' frequencies, and PhotonVision's
+  restarts. A monitor the team's images carry may report them; otherwise read them over SSH. In
+  PowerShell (the address yours):
 
   ```powershell
-  while ($true) {
-    try { "$(Get-Date -Format o) $(Invoke-RestMethod http://10.12.34.11:5808/v1/health | ConvertTo-Json -Compress -Depth 10)" | Add-Content health.log } catch {}
-    Start-Sleep 1
-  }
+  ssh photon@10.12.34.11 'while true; do echo "$(cat /proc/sys/kernel/random/boot_id) $(cut -d" " -f1 /proc/uptime) temps=$(cat /sys/class/thermal/thermal_zone*/temp | paste -sd,) mhz=$(cat /sys/devices/system/cpu/cpu[4-7]/cpufreq/scaling_cur_freq | paste -sd,) restarts=$(systemctl show photonvision -p NRestarts --value)"; sleep 1; done' |
+    ForEach-Object { "$(Get-Date -Format o) $_" } | Add-Content health.log
   ```
 
 - **PhotonVision's dashboard** at `http://10.TE.AM.<address>:5800`, for frame rates.
-- **The release's `manifest.json`**, which says what the computer's stamp and settings hash should
+- **The release's `manifest.json`**, which says what the computer's labels and settings hash should
   be.
 
 **Safety, with a mentor there:** a coprocessor under load gets hot enough to burn; let it cool
@@ -58,15 +56,17 @@ measures how many cameras one board carries; this checks the plan you settled on
 2. AprilTags in every camera's view, 1 to 4 m away, so detection does real work.
 3. The cooling and enclosure exactly as mounted on the robot, at room temperature or warmer.
 4. Run for **20 minutes**: two match lengths and the time in the queue between them. Log the
-   agent once a second throughout.
+   readings once a second throughout.
 
 **Pass, all of:**
 - [ ] Every camera holds at least **95% of its target frame rate in every 10-second window**.
-- [ ] The big cores **never drop below their maximum frequency** (the agent reports both).
-- [ ] The hottest thermal zone stays **at least 5 °C under its first passive trip point** (the
-      agent reads the trip points from the board, since they differ by kernel).
-- [ ] **No PhotonVision restart and no USB error** in the run (the agent's restart count and
-      journal errors).
+- [ ] The big cores **never drop below their maximum frequency** (`cpuinfo_max_freq`, beside each
+      core's `scaling_cur_freq`).
+- [ ] The hottest thermal zone stays **at least 5 °C under its first passive trip point** (read
+      from the board, `/sys/class/thermal/thermal_zone*/trip_point_*`, since they differ by
+      kernel).
+- [ ] **No PhotonVision restart and no USB error** in the run (its restart count, and the kernel's
+      journal: `journalctl -k -p err`).
 
 **If it fails:** move a camera to another computer, add cooling, or lower a camera's rate, then run
 it again. Keep the frame rate and add a computer when it comes to a choice: more images is more
@@ -80,7 +80,7 @@ long it's gone when it doesn't.
 **Steps:**
 
 1. Run [Coprocessor brownout ride-through](../../docs/characterization.md#coprocessor-brownout-ride-through),
-   with every camera running and the agent logged. Add **sudden dips of 0.1 s, 0.5 s, and 2 s**:
+   with every camera running and the readings logged. Add **sudden dips of 0.1 s, 0.5 s, and 2 s**:
    real sags under drivetrain load last hundreds of milliseconds to seconds.
 2. Measure the **reboot time**: from power back to PhotonVision's results reaching the robot (or its
    dashboard showing targets again). It's what every reset costs; write it down.
@@ -88,7 +88,7 @@ long it's gone when it doesn't.
    robot, powering the coprocessor without a break): first check the season's game manual. It
    says which batteries may power a computing device, and whether charging one from the robot is
    allowed; ask FIRST's Q&A if it doesn't say. Then test each pack model with the coprocessor and
-   every camera running and the agent logging its boot ID and uptime:
+   every camera running and the readings logging its boot ID and uptime:
    - **Input toggling:** switch the pack's charging input on and off 50 times at random intervals
      of 0.5 to 10 s, as robot power cycles and brownouts would.
    - **Full current:** 30 minutes at the board's full draw (up to 4 A at 5 V for an Orange Pi 5;
@@ -123,7 +123,7 @@ supply these cuts are rare; this proves the fallback rather than an everyday eve
 
 **Steps:** cut power about **20 times**, letting it boot fully between cuts unless the cut is meant
 to land during boot:
-1. A few during boot (before the agent answers).
+1. A few during boot (before PhotonVision answers).
 2. A few while idle.
 3. A few while every camera streams.
 4. **Five within 2 seconds of a settings change** in PhotonVision's dashboard (move a slider, then
@@ -132,29 +132,30 @@ to land during boot:
 Before the first cut and after the last, read the root partition's write counters over SSH:
 `sudo tune2fs -l "$(findmnt -no SOURCE /)" | grep -E 'Lifetime writes|Last write time'`.
 
-Then the gentle way, **soft-off**, five times with every camera streaming: the robot asks the agent
-to shut down (`POST /v1/shutdown`), and once the agent says it's safe, switch the power off.
-PhotonVision's stop is bounded at 15 s (the image's drop-in for `photonvision.service`), a proposal
-this checks.
+Then the gentle way, **a clean power-off**, five times with every camera streaming: ask the
+computer to power off (`sudo systemctl poweroff` over SSH, or however the team's software asks),
+and once its network is gone, switch the power off. PhotonVision's stop is bounded at 15 s (the
+image's drop-in for `photonvision.service`), a proposal this checks.
 
 **Pass, all of:**
 - [ ] **20 of 20 boots recover unattended**: no one touches the board.
-- [ ] After every boot, the agent's **version, stamp, and settings hash** (calibrations included)
-      match the release's `manifest.json`.
+- [ ] After every boot, the image's **labels** (`/etc/os-release`: `IMAGE_VERSION`,
+      `PADDOCK_PHOTONVISION_VERSION`, `PADDOCK_SETTINGS_HASH`) match the release's
+      `manifest.json`, and PhotonVision's settings (calibrations included) still hash to it.
 - [ ] **The root is never written**: its write counters read the same before the first cut and
       after the last.
 - [ ] **Repairs on `/data` are logged** (`journalctl -b -u 'systemd-fsck@*'`), and **no settings are
       lost**: the settings hash still matches, and the last change before each cut is either kept
       or cleanly absent.
-- [ ] The drive's **unsafe shutdowns count rises by 20** (the agent reports it), so every cut was
-      a real one.
+- [ ] The drive's **unsafe shutdowns count rises by 20** (`sudo nvme smart-log /dev/nvme0`), so
+      every cut was a real one.
 - [ ] **The journal keeps entries to within its sync interval (10 s) of each cut:** the previous
       boot's last entry (`journalctl -b -1 -n 1 -o short-monotonic`) is within 10 s of the uptime
-      the agent last reported before that cut.
-- [ ] **Soft-off, 5 of 5:** PhotonVision stops by itself well inside 15 s (after the next boot,
-      `journalctl -b -1 -u photonvision` shows it stopped, not killed at the timeout), the agent
-      says it's safe before the power goes, and the next boot counts it as a clean shutdown with
-      no rise in unsafe shutdowns.
+      last logged before that cut.
+- [ ] **Clean power-off, 5 of 5:** PhotonVision stops by itself well inside 15 s (after the next
+      boot, `journalctl -b -1 -u photonvision` shows it stopped, not killed at the timeout), the
+      network goes before the power does, and the next boot counts it as a clean shutdown with no
+      rise in unsafe shutdowns.
 
 ## B4: Recovery
 
@@ -168,7 +169,8 @@ this checks.
 **Pass, for each of (a) and (b):**
 - [ ] Done **within 5 minutes for (a), within 30 minutes for (b)**.
 - [ ] Every camera reports, **with its committed calibration**.
-- [ ] The agent's **stamp and settings hash match the release's `manifest.json`**.
+- [ ] The image's **labels match the release's `manifest.json`** (`/etc/os-release`, or the
+      drive's `COPROC/stamp.json`).
 - [ ] The robot's **alerts for that computer clear**.
 
 If (a) fails, the spare wasn't current: reflash spares whenever a release changes that computer's
