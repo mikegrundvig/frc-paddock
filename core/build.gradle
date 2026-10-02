@@ -27,7 +27,7 @@ repositories {
 }
 
 dependencies {
-    api "com.michaelgrundvig.frc.spotter:api:0.1.0"
+    api "com.michaelgrundvig.frc.spotter:api:${rootProject.spotterVersion}"
 
     errorprone libs.errorprone.core
     errorprone libs.nullaway

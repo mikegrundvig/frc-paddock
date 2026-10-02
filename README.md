@@ -81,7 +81,7 @@ becomes Spotter's released artifacts later; the images already install Spotter's
 
 ```bash
 git clone https://github.com/mikegrundvig/frc-spotter ../frc-spotter
-git -C ../frc-spotter checkout v0.1.0
+git -C ../frc-spotter checkout v0.1.1
 ./gradlew ci
 ```
 

@@ -37,7 +37,7 @@ dependencies {
     errorprone libs.nullaway
 
     testImplementation project(":core")
-    testImplementation "com.michaelgrundvig.frc.spotter:harness:0.1.0"
+    testImplementation "com.michaelgrundvig.frc.spotter:harness:${rootProject.spotterVersion}"
     testImplementation platform(libs.junit.bom)
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
