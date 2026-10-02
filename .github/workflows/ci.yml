@@ -55,6 +55,17 @@ jobs:
             # What failed, as an annotation beside the run, where it's read without the full log.
             grep -E -A15 "What went wrong|FAILED|^FAIL |^    FAILED" "$RUNNER_TEMP/ci.log" | head -80 |
               python3 -c 'import sys; t=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=gradlew ci::"+t)'
+            # And each failed test's message, with what it printed.
+            python3 - <<'PY'
+          import glob, html, re
+          for path in glob.glob("**/build/test-results/test/*.xml", recursive=True):
+              text = open(path, encoding="utf-8").read()
+              for case in re.finditer(r'<testcase name="([^"]*)"[^>]*>\s*<failure message="([^"]*)"', text):
+                  out = re.search(r"<system-out><!\[CDATA\[(.*?)\]\]>", text, re.S)
+                  body = html.unescape(case.group(2))[-2500:] + "\n" + (out.group(1)[-1500:] if out else "")
+                  body = body.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                  print("::error title=" + case.group(1) + "::" + body)
+          PY
             exit 1
           fi
       - name: Upload reports

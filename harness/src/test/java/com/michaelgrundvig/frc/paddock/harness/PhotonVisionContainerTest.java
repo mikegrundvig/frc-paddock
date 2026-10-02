@@ -71,7 +71,16 @@ class PhotonVisionContainerTest {
     for (int i = 0; i < 1800 && !answers(); i++) {
       Thread.sleep(100);
     }
-    assertThat(answers()).as("PhotonVision's page answers within 3 minutes").isTrue();
+    assertThat(answers())
+        .as(
+            () ->
+                "PhotonVision's page answers within 3 minutes; its unit and journal:\n"
+                    + coprocessor.run(
+                        "sh",
+                        "-c",
+                        "systemctl status photonvision --no-pager -n 0;"
+                            + " journalctl -u photonvision --no-pager -n 60 || true"))
+        .isTrue();
     startedSeconds = (System.nanoTime() - starting) / 1e9;
     awaitProbe("photonvision.http", ProbeResult::passed, 10);
     System.out.printf("PhotonVision answered %.1f s after its container started%n", startedSeconds);
