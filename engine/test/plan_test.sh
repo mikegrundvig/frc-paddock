@@ -1,9 +1,10 @@
 # shellcheck shell=bash
 # plan.sh: the build's inputs checked before anything is downloaded.
 
-# Runs the copy's plan.sh (make_paddock_copy) on make_team's table.
+# Runs the copy's plan.sh (make_paddock_copy) on make_team's table, printing what it outputs (not
+# into Actions' $GITHUB_OUTPUT, when the tests run in Actions).
 run_plan() {
-  "$TMP/paddock/engine/plan.sh" --table "$TMP/team/coprocessors.yaml" "$@" 2>&1
+  GITHUB_OUTPUT='' "$TMP/paddock/engine/plan.sh" --table "$TMP/team/coprocessors.yaml" "$@" 2>&1
 }
 
 # A value from plan.sh's name=value output.
