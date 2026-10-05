@@ -1,0 +1,5 @@
+# shellcheck's settings for Paddock (./gradlew ci runs it).
+external-sources=true
+source-path=SCRIPTDIR
+# The plan's variables (IMAGE, COMPUTER, RELEASE...) come from sourced env files shellcheck can't see.
+disable=SC2153

@@ -1,0 +1,16 @@
+# Your program, started at boot and restarted if it stops. Its output goes to the journal:
+# journalctl -u camera-check
+[Unit]
+Description=Camera check
+After=network.target
+
+[Service]
+ExecStart=/opt/camera-check/camera-check.py
+Restart=always
+RestartSec=5
+# Runs as a user systemd makes up for it, not root, with access to the cameras.
+DynamicUser=yes
+SupplementaryGroups=video
+
+[Install]
+WantedBy=multi-user.target

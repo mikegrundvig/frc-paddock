@@ -1,0 +1,23 @@
+# A Raspberry Pi: Raspberry Pi OS Lite you can log into by SSH key, with a package and a file added
+# (README.md). Every path here is from this file's folder.
+images:
+  pi:
+    from:
+      url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-09-15/2026-09-15-raspios-trixie-arm64-lite.img.xz
+      sha256: cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5
+    grow: 512M
+    steps:
+      # Someone else's package, from its release: installed by apt.
+      - package: https://github.com/sharkdp/fd/releases/download/v10.5.0/fd_10.5.0_arm64.deb
+        sha256: a3128d8e206dd646a27f4637ca081f311df2d6f21cd87bbead7fc92cc0952192
+      # A file from this folder.
+      - file: files/motd
+        to: /etc/motd
+      # A script from this folder, run as root inside the image: pi, your keys, and SSH.
+      - run: setup/login.sh
+
+computers:
+  - hostname: pi-bench
+    image: pi
+    address: 10.0.0.21/24
+    gateway: 10.0.0.4

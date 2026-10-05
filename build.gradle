@@ -1,0 +1,12 @@
+// Paddock's checks: ./gradlew ci runs everything CI runs (engine/build.gradle, harness/build.gradle).
+// Teams never run this; it's how Paddock itself is tested.
+
+plugins {
+    alias(libs.plugins.spotless) apply false
+}
+
+tasks.register("ci") {
+    group = "verification"
+    description = "Run every check CI runs: shellcheck, the engine's tests, the integration tests."
+    dependsOn ":engine:ci", ":harness:ci"
+}

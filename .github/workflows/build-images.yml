@@ -1,0 +1,276 @@
+name: Build images
+
+# Paddock's image workflow, which a team's repository calls (docs/getting-started.md). It builds each
+# image in the team's paddock.yaml, stamps a copy per computer, and, given a release name, publishes
+# them as a release of the team's repository. The engine is checked out at this workflow's own
+# commit, so pinning the workflow pins everything that runs.
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: "Path to paddock.yaml, from the repository's root"
+        type: string
+        default: paddock.yaml
+      notice:
+        description: "The team's notice, from paddock.yaml's folder; skipped if it isn't there"
+        type: string
+        default: NOTICE.md
+      release:
+        description: "The release to cut, such as images-2027.1 (empty: build only)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # bash -e with pipefail, for every step.
+    shell: bash
+
+env:
+  WORK: build/paddock
+  # mikefarah's yq, pinned: the engine's input check and manifest depend on its behaviour.
+  YQ_URL: https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64
+  YQ_SHA256: 8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
+
+jobs:
+  plan:
+    name: Check the input
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      # Names this call's artifacts, so two calls in one run don't clash.
+      id: ${{ steps.plan.outputs.id }}
+      release: ${{ steps.plan.outputs.release }}
+      publish: ${{ steps.plan.outputs.publish }}
+      images: ${{ steps.plan.outputs.images }}
+      computers: ${{ steps.plan.outputs.computers }}
+    steps:
+      # Actions are pinned to a commit (the version beside it), so a moved tag can't change what runs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: team
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: paddock
+          persist-credentials: false
+      - name: Install yq
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --fail --location --silent --show-error --retry 3 --output "$RUNNER_TEMP/bin/yq" "$YQ_URL"
+          echo "$YQ_SHA256  $RUNNER_TEMP/bin/yq" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/bin/yq"
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - name: Check the input and plan the build
+        id: plan
+        env:
+          CONFIG: ${{ inputs.config }}
+          RELEASE: ${{ inputs.release }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          mkdir -p "$WORK"
+          args=(--config "team/$CONFIG" --repo team --out "$WORK/plan" --commit "$SHA" --repository "$REPOSITORY")
+          if [[ -n $RELEASE ]]; then args+=(--release "$RELEASE"); fi
+          paddock/engine/plan.sh "${args[@]}" 2>&1 | tee -a "$WORK/job.log"
+          echo "id=paddock-$(printf '%s' "$CONFIG" | sha256sum | cut -c1-8)" >>"$GITHUB_OUTPUT"
+      - name: Say why it failed
+        if: failure()
+        run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.plan.outputs.id }}-plan
+          path: ${{ env.WORK }}/plan/
+          if-no-files-found: error
+          retention-days: 1
+
+  image:
+    name: Image ${{ matrix.image }}
+    needs: plan
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      # Each image builds whatever another does: one failing says nothing about the rest.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: team
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: paddock
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.plan.outputs.id }}-plan
+          path: ${{ env.WORK }}/plan
+      - name: Download what the image is built from, checked
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p "$WORK"
+          paddock/engine/fetch.sh --plan "$WORK/plan" --image "$IMAGE" --out "$WORK/inputs" 2>&1 |
+            tee -a "$WORK/job.log"
+      - name: Build the image
+        env:
+          IMAGE: ${{ matrix.image }}
+          CONFIG: ${{ inputs.config }}
+        run: |
+          exec > >(tee -a "$WORK/job.log") 2>&1
+          sudo paddock/engine/build-image.sh --plan "$WORK/plan" --image "$IMAGE" \
+            --config-dir "team/$(dirname "$CONFIG")" --inputs "$WORK/inputs" --out "$WORK/$IMAGE.img"
+      - name: Pack the image
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p "$WORK/out"
+          sudo sha256sum "$WORK/$IMAGE.img" | cut -c1-64 >"$WORK/out/$IMAGE.sha256"
+          sudo cat "$WORK/$IMAGE.img" | xz -T0 -1 >"$WORK/out/$IMAGE.img.xz"
+          sudo rm -f "$WORK/$IMAGE.img"
+      - name: Say why it failed
+        if: failure()
+        run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.plan.outputs.id }}-image-${{ matrix.image }}
+          path: ${{ env.WORK }}/out/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  stamp:
+    name: Stamp ${{ matrix.hostname }}
+    needs: [plan, image]
+    # Stamping writes files and runs no image code: any runner will do.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.computers) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: paddock
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.plan.outputs.id }}-plan
+          path: ${{ env.WORK }}/plan
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.plan.outputs.id }}-image-${{ matrix.image }}
+          path: ${{ env.WORK }}/image
+      - name: Stamp ${{ matrix.hostname }}'s copy of its image
+        env:
+          NAME: ${{ matrix.hostname }}
+          IMAGE: ${{ matrix.image }}
+          RELEASE: ${{ needs.plan.outputs.release }}
+        run: |
+          mkdir -p "$WORK/out"
+          exec > >(tee -a "$WORK/job.log") 2>&1
+          base="$NAME-$RELEASE"
+          xz -dc "$WORK/image/$IMAGE.img.xz" | dd of="$WORK/$base.img" bs=4M iflag=fullblock conv=sparse status=none
+          echo "$(cat "$WORK/image/$IMAGE.sha256")  $WORK/$base.img" | sha256sum --check --strict
+          sudo paddock/engine/stamp-image.sh --plan "$WORK/plan" --computer "$NAME" "$WORK/$base.img" \
+            --stamp-out "$WORK/out/$base.stamp.json"
+          sudo chown "$(id -u):$(id -g)" "$WORK/out/$base.stamp.json"
+          xz -T0 -c "$WORK/$base.img" >"$WORK/out/$base.img.xz"
+          rm "$WORK/$base.img"
+      - name: Say why it failed
+        if: failure()
+        run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.plan.outputs.id }}-computer-${{ matrix.hostname }}
+          path: ${{ env.WORK }}/out/
+          compression-level: 0
+          if-no-files-found: error
+          # A release holds the images; without one, these are the build's only output.
+          retention-days: ${{ needs.plan.outputs.publish == 'yes' && 1 || 7 }}
+
+  release:
+    name: Release
+    needs: [plan, stamp]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    # One release of a name at a time.
+    concurrency:
+      group: paddock-release-${{ github.repository }}-${{ needs.plan.outputs.release }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: team
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: paddock
+          persist-credentials: false
+      - name: Install yq
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --fail --location --silent --show-error --retry 3 --output "$RUNNER_TEMP/bin/yq" "$YQ_URL"
+          echo "$YQ_SHA256  $RUNNER_TEMP/bin/yq" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/bin/yq"
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ needs.plan.outputs.id }}-computer-*
+          merge-multiple: true
+          path: ${{ env.WORK }}/release
+      - name: Write SHA256SUMS and manifest.json
+        id: files
+        env:
+          CONFIG: ${{ inputs.config }}
+          NOTICE: ${{ inputs.notice }}
+        run: |
+          mkdir -p "$WORK"
+          exec > >(tee -a "$WORK/job.log") 2>&1
+          notice="team/$(dirname "$CONFIG")/$NOTICE"
+          args=()
+          # The team's own file only: not a link, which could reach anything on this runner.
+          if [[ -n $NOTICE && -f $notice && ! -L $notice ]]; then
+            cp "$notice" "$WORK/release/"
+            args=(--notice "$(basename "$NOTICE")")
+            echo "notice=$(basename "$NOTICE")" >>"$GITHUB_OUTPUT"
+          fi
+          paddock/engine/manifest.sh "$WORK/release" "${args[@]}"
+          cat "$WORK/release/manifest.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.plan.outputs.id }}-release
+          path: |
+            ${{ env.WORK }}/release/SHA256SUMS
+            ${{ env.WORK }}/release/manifest.json
+          retention-days: 7
+      # Only in the team's own repository, never a fork's, and only when a release was asked for.
+      - name: Cut the release
+        if: needs.plan.outputs.publish == 'yes' && !github.event.repository.fork
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.plan.outputs.release }}
+          NOTICE: ${{ steps.files.outputs.notice }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          args=(--dir "$WORK/release" --release "$RELEASE" --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY")
+          if [[ -n $NOTICE ]]; then args+=(--notice "$NOTICE"); fi
+          if [[ -n $TAG ]]; then args+=(--tag-name "$TAG"); fi
+          paddock/engine/release.sh "${args[@]}" 2>&1 | tee -a "$WORK/job.log"
+      - name: Say why it failed
+        if: failure()
+        run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"

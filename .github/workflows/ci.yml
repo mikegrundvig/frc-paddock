@@ -1,0 +1,149 @@
+name: CI
+
+# ./gradlew ci (shellcheck, the engine's unit tests, the integration tests), then, on main and on
+# version tags, every example built end to end through the image workflow. On main, one of them is
+# also released and checked as a rehearsal of the release path. (On a tag it can't be: a run a tag
+# starts may only release under that tag's name.)
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Only a pull request's runs give way to newer ones: every commit to main is built end to end.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  YQ_URL: https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64
+  YQ_SHA256: 8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
+  SHELLCHECK_URL: https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+  SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+
+jobs:
+  ci:
+    name: Check and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # Actions are pinned to a commit (the version beside it), so a moved tag can't change what runs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tools for the tests
+        run: |
+          sudo apt-get update --quiet
+          sudo apt-get install --yes --quiet --no-install-recommends fdisk e2fsprogs
+      # yq and shellcheck pinned, not the runner's, so CI tests and lints as a laptop does.
+      - name: Install yq and shellcheck
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl --fail --location --silent --show-error --retry 3 --output "$RUNNER_TEMP/bin/yq" "$YQ_URL"
+          echo "$YQ_SHA256  $RUNNER_TEMP/bin/yq" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/bin/yq"
+          curl --fail --location --silent --show-error --retry 3 --output "$RUNNER_TEMP/shellcheck.tar.xz" "$SHELLCHECK_URL"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/shellcheck.tar.xz" | sha256sum --check --strict
+          tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP" --strip-components=1 shellcheck-v0.11.0/shellcheck
+          mv "$RUNNER_TEMP/shellcheck" "$RUNNER_TEMP/bin/"
+          echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          # The open-source cache, not the default commercial one.
+          cache-provider: basic
+      - name: ./gradlew ci
+        run: |
+          if ! ./gradlew ci 2>&1 | tee "$RUNNER_TEMP/ci.log"; then
+            text=$(grep -E -A15 "What went wrong|FAILED|^FAIL " "$RUNNER_TEMP/ci.log" | head -80)
+            text=${text//'%'/'%25'}
+            text=${text//$'\n'/'%0A'}
+            echo "::error title=gradlew ci::$text"
+            exit 1
+          fi
+      - name: Upload reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reports-${{ github.sha }}
+          path: |
+            */build/reports/
+            */build/test-results/
+          if-no-files-found: warn
+
+  # Each example (examples/), built end to end as a team's repository builds it.
+  photonvision-orangepi:
+    name: Example photonvision-orangepi
+    needs: ci
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/build-images.yml
+    # The workflow's release job asks for it; without a release name it publishes nothing.
+    permissions:
+      contents: write
+    with:
+      config: examples/photonvision-orangepi/paddock.yaml
+
+  raspberry-pi-service:
+    name: Example raspberry-pi-service
+    needs: ci
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/build-images.yml
+    permissions:
+      contents: write
+    with:
+      config: examples/raspberry-pi-service/paddock.yaml
+
+  raspberry-pi-read-only:
+    name: Example raspberry-pi-read-only
+    needs: ci
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/build-images.yml
+    permissions:
+      contents: write
+    with:
+      config: examples/raspberry-pi-read-only/paddock.yaml
+
+  # Released for real, under a throwaway name, then checked and deleted: the release path runs on
+  # every main commit, not first in a team's repository.
+  raspberry-pi:
+    name: Example raspberry-pi (released on main)
+    needs: ci
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/build-images.yml
+    permissions:
+      contents: write
+    with:
+      config: examples/raspberry-pi/paddock.yaml
+      release: ${{ github.ref_type == 'branch' && format('rehearsal-{0}-{1}', github.run_id, github.run_attempt) || '' }}
+
+  rehearsal:
+    name: Check the rehearsal release
+    needs: raspberry-pi
+    if: always() && needs.raspberry-pi.result != 'skipped' && github.ref_type == 'branch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE: rehearsal-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check its files, tag, and manifest
+        if: needs.raspberry-pi.result == 'success'
+        run: |
+          dir=$(mktemp -d)
+          gh release download "$RELEASE" --repo "$GITHUB_REPOSITORY" --dir "$dir"
+          diff <(printf '%s\n' NOTICE.md SHA256SUMS manifest.json "pi-bench-$RELEASE.img.xz" | sort) <(find "$dir" -mindepth 1 -printf '%f\n' | sort)
+          (cd "$dir" && sha256sum --check --strict SHA256SUMS)
+          [[ $(jq -r .commit "$dir/manifest.json") == "$GITHUB_SHA" ]]
+          [[ $(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE" --jq .sha) == "$GITHUB_SHA" ]]
+      - name: Delete it
+        if: always()
+        run: gh release delete "$RELEASE" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true

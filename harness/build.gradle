@@ -1,0 +1,76 @@
+// The integration tests: the engine against a real Linux, in containers (Testcontainers). They need
+// Docker or Podman running Linux containers, and bash and yq for plan.sh. Without a runtime they
+// skip; in CI on Linux they must run. The build-image test needs privileged containers with loop
+// devices (rootful Docker, as on GitHub's runners), so it skips under rootless Podman.
+
+plugins {
+    id "java"
+    id "com.diffplug.spotless"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform(libs.testcontainers.bom)
+    testImplementation libs.testcontainers.core
+    testImplementation platform(libs.junit.bom)
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+    testImplementation libs.assertj.core
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll(["-Xlint:cast,divzero,empty,fallthrough,finally,overrides,rawtypes,unchecked", "-Werror"])
+}
+
+tasks.named("test") {
+    useJUnitPlatform()
+    maxHeapSize = "1536m"
+    // Images build and boot within minutes; a hung test fails rather than hanging the build.
+    systemProperty "junit.jupiter.execution.timeout.default", "15 m"
+    systemProperty "paddock.root", rootDir.absolutePath
+    inputs.files(rootProject.fileTree("engine") { exclude "build/**", "test/**" })
+        .withPropertyName("engine").withPathSensitivity(PathSensitivity.RELATIVE)
+    def os = System.getProperty("os.name").toLowerCase()
+    systemProperty "paddock.requireContainers", (System.getenv("CI") != null && os.contains("linux")).toString()
+    // The tests remove their own containers, so Testcontainers' cleanup container isn't needed.
+    environment "TESTCONTAINERS_RYUK_DISABLED", "true"
+    // Rootless Podman's user socket, when it's there and nothing else was asked for.
+    def runtimeDir = System.getenv("XDG_RUNTIME_DIR")
+    def podman = runtimeDir == null ? null : new File(runtimeDir, "podman/podman.sock")
+    if (System.getenv("DOCKER_HOST") == null && podman != null && podman.exists()) {
+        environment "DOCKER_HOST", "unix://" + podman.absolutePath
+    }
+}
+
+// google-java-format, pinned so CI and every machine agree. Local builds fix formatting; CI checks.
+spotless {
+    lineEndings = "UNIX"
+    java {
+        target "src/**/*.java"
+        googleJavaFormat(libs.versions.google.java.format.get())
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+if (System.getenv("CI") == null) {
+    tasks.named("compileTestJava") {
+        dependsOn "spotlessApply"
+    }
+}
+
+tasks.register("ci") {
+    group = "verification"
+    description = "Check formatting and run the integration tests."
+    dependsOn "spotlessCheck", "test"
+}

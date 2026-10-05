@@ -1,0 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    // Downloads the JDK the build asks for (java.toolchain), so ./gradlew works on any machine with
+    // any Java installed.
+    id "org.gradle.toolchains.foojay-resolver-convention" version "1.0.0"
+}
+
+rootProject.name = "frc-paddock"
+
+// The engine (shell): its tests, run by Gradle.
+include "engine"
+// The container tests: an image built by the engine, booted under systemd.
+include "harness"

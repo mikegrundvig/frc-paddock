@@ -1,0 +1,28 @@
+# A Raspberry Pi with a read-only root: pulling the power can't damage it, and what has to last
+# lives on a small data partition (README.md). Every path here is from this file's folder.
+images:
+  pi:
+    from:
+      url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-09-15/2026-09-15-raspios-trixie-arm64-lite.img.xz
+      sha256: cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5
+    steps:
+      - file: files/journald.conf
+        to: /etc/systemd/journald.conf.d/70-read-only.conf
+      - file: files/e2fsck.conf
+        to: /etc/e2fsck.conf
+      - file: files/swap.conf
+        to: /etc/rpi/swap.conf
+      # Log in as pi with your SSH keys (the same step as the raspberry-pi example's).
+      - run: setup/login.sh
+      # What Raspberry Pi OS does that a read-only root can't have.
+      - run: setup/read-only.sh
+    read-only:
+      data: 512M
+      # The journal; SSH's settings and each board's own host keys; pi's home.
+      keep: [/var/log/journal, /etc/ssh, /home/pi]
+
+computers:
+  - hostname: pi-logger
+    image: pi
+    address: 10.0.0.41/24
+    gateway: 10.0.0.4

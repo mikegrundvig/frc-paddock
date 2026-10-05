@@ -1,0 +1,72 @@
+// The engine is bash: shellcheck lints it (and the examples' and harness's scripts), and engine/test/run.sh tests
+// it. Off Linux and macOS both skip, saying so; in CI on Linux nothing may skip.
+
+def os = System.getProperty("os.name").toLowerCase()
+def windows = os.contains("windows")
+def strict = System.getenv("CI") != null && os.contains("linux")
+def root = rootDir
+
+def shellcheck = tasks.register("shellcheck") {
+    group = "verification"
+    description = "Lint the engine's, the examples' and the harness's scripts with shellcheck."
+    def scripts = rootProject.fileTree(".") {
+        include "engine/**/*.sh", "examples/**/*.sh", "harness/src/**/*.sh"
+        exclude "**/build/**"
+    }
+    inputs.files(scripts).withPathSensitivity(PathSensitivity.RELATIVE)
+    def marker = layout.buildDirectory.file("shellcheck/passed")
+    outputs.file(marker)
+    doLast {
+        marker.get().asFile.delete()
+        def found = !windows && new ProcessBuilder("bash", "-c", "command -v shellcheck").start().waitFor() == 0
+        if (!found) {
+            if (strict) {
+                throw new GradleException("shellcheck isn't installed, and CI must run it.")
+            }
+            logger.lifecycle("shellcheck skipped: it isn't installed (https://www.shellcheck.net). CI runs it.")
+            return
+        }
+        def command = ["shellcheck", "--external-sources", "--source-path=SCRIPTDIR"] +
+                scripts.files.collect { root.toPath().relativize(it.toPath()).toString() }.sort()
+        def run = new ProcessBuilder(command).directory(root).redirectErrorStream(true).start()
+        def output = run.inputStream.text
+        if (run.waitFor() != 0) {
+            throw new GradleException("shellcheck found problems:\n" + output)
+        }
+        marker.get().asFile.parentFile.mkdirs()
+        marker.get().asFile.text = "ok\n"
+    }
+}
+
+def engineTests = tasks.register("engineTest") {
+    group = "verification"
+    description = "Run the engine's tests (engine/test/run.sh)."
+    inputs.files(fileTree(projectDir) { exclude "build/**" }).withPathSensitivity(PathSensitivity.RELATIVE)
+    def marker = layout.buildDirectory.file("engine-test/passed")
+    outputs.file(marker)
+    doLast {
+        marker.get().asFile.delete()
+        if (windows) {
+            logger.lifecycle("Engine tests skipped: they run on Linux and macOS, and in CI.")
+            return
+        }
+        def builder = new ProcessBuilder("bash", "engine/test/run.sh").directory(root).redirectErrorStream(true)
+        if (strict) {
+            builder.environment().put("PADDOCK_TESTS_STRICT", "1")
+        }
+        def run = builder.start()
+        def output = run.inputStream.text
+        if (run.waitFor() != 0) {
+            throw new GradleException("Engine tests failed:\n" + output)
+        }
+        logger.lifecycle(output.readLines().last())
+        marker.get().asFile.parentFile.mkdirs()
+        marker.get().asFile.text = output
+    }
+}
+
+tasks.register("ci") {
+    group = "verification"
+    description = "Lint and test the engine, as CI does."
+    dependsOn shellcheck, engineTests
+}
