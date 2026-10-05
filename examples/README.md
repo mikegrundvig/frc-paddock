@@ -10,7 +10,6 @@ images give you and what you'd change.
 | [`raspberry-pi/`](raspberry-pi/) | Raspberry Pi OS Lite you can SSH into with your keys, plus a package and a file. The one [Getting started](../docs/getting-started.md) builds |
 | [`raspberry-pi-service/`](raspberry-pi-service/) | Your own program as a service: a small Python/OpenCV script started at boot, on two computers sharing one image, each with its own camera calibration |
 | [`raspberry-pi-read-only/`](raspberry-pi-read-only/) | A read-only root on a Raspberry Pi, with the journal, SSH keys, and a home folder kept on a small data partition |
-| [`photonvision-orangepi/`](photonvision-orangepi/) | A computer locked down for a robot: PhotonVision on an Orange Pi 5, with a read-only root, SSH by key only, and no default passwords |
 
 Their addresses are placeholders (`10.0.0.x`); yours are `10.TE.AM.x`.
 

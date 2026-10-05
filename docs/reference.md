@@ -100,8 +100,8 @@ at most three partitions. Paddock knows four things about a base, each through a
 Before your steps run, Paddock checks the base has apt, dpkg, and systemd, and an ext4 root. After
 they run, nothing but NetworkManager can be configuring Ethernet, so nothing fights over the
 stamped address: an enabled systemd-networkd, netplan files that don't hand off to NetworkManager,
-and ifupdown Ethernet entries each fail the build. A step can turn those off (the
-[photonvision-orangepi example](../examples/photonvision-orangepi/) does).
+and ifupdown Ethernet entries each fail the build. A step can turn those off: the build's message
+says how for each.
 
 Need a base that doesn't fit? [Open an issue](https://github.com/mikegrundvig/frc-paddock/issues).
 Another value for an axis is usually one new adapter file.

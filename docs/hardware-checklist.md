@@ -42,4 +42,4 @@ something to do to it.
 ## The examples
 
 Each example's README lists the checks for what it sets up, like
-[photonvision-orangepi](../examples/photonvision-orangepi/README.md#on-the-board).
+[raspberry-pi-read-only](../examples/raspberry-pi-read-only/README.md#on-the-board).

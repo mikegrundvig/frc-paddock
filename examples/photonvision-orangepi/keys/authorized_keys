@@ -1,3 +1,0 @@
-# Your SSH public keys, one per line, to log in as photon: each person's own, from their own laptop
-# (docs/how-to.md, "Control who can log in"). Public keys only, never a private key. Label each by
-# its machine, not its person: anyone who can see this repository can read the labels.

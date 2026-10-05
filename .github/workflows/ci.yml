@@ -79,22 +79,12 @@ jobs:
           if-no-files-found: warn
 
   # Each example (examples/), built end to end as a team's repository builds it.
-  photonvision-orangepi:
-    name: Example photonvision-orangepi
-    needs: ci
-    if: github.event_name != 'pull_request'
-    uses: ./.github/workflows/build-images.yml
-    # The workflow's release job asks for it; without a release name it publishes nothing.
-    permissions:
-      contents: write
-    with:
-      config: examples/photonvision-orangepi/paddock.yaml
-
   raspberry-pi-service:
     name: Example raspberry-pi-service
     needs: ci
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/build-images.yml
+    # The workflow's release job asks for it; without a release name it publishes nothing.
     permissions:
       contents: write
     with:
