@@ -192,7 +192,7 @@ on GitHub's ARM runners). Only people with access to the repository can download
 
 ## Upgrade Paddock
 
-Change `@v1.0.0-beta.1` in your workflow to the new version and read its release notes: a new major
+Change `@v1.0.0` in your workflow to the new version and read its release notes: a new major
 version may mean changes to `paddock.yaml`. If you'd rather pin an exact commit than a tag, use
 `@<full commit SHA>`.
 

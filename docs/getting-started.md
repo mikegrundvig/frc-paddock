@@ -97,14 +97,14 @@ on:
         default: ""
 jobs:
   images:
-    uses: mikegrundvig/frc-paddock/.github/workflows/build-images.yml@v1.0.0-beta.1
+    uses: mikegrundvig/frc-paddock/.github/workflows/build-images.yml@v1.0.0
     permissions:
       contents: write
     with:
       release: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release }}
 ```
 
-This is the only place Paddock shows up in your repository. `@v1.0.0-beta.1` pins the version, so
+This is the only place Paddock shows up in your repository. `@v1.0.0` pins the version, so
 your images only change when your repository does.
 
 ## 6. Build and release

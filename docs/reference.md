@@ -171,5 +171,3 @@ the run, it has to be that tag. Forks build but never release.
 
 Paddock's versions are tags, `vMAJOR.MINOR.PATCH`. A patch fixes things; a minor adds things without
 changing what an existing `paddock.yaml` builds; a major may need changes to your `paddock.yaml`.
-While Paddock is in beta, its versions end in `-beta.N` (`v1.0.0-beta.1`), and a new beta may need
-small changes to `paddock.yaml`: its release notes say what.

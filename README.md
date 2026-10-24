@@ -5,8 +5,8 @@ image in a `paddock.yaml`: a base image to start from (Raspberry Pi OS, say) and
 Paddock builds it on GitHub, stamps a copy for each computer with its own hostname and address, and
 publishes them as a release you can flash.
 
-**Paddock is in beta.** It's built and tested in CI, but it needs real robots. If you have
-coprocessor hardware and want to try it,
+**Paddock hasn't run on robot hardware yet.** It's built and tested in CI, but it needs real
+robots. If you have coprocessor hardware and want to try it,
 [open an issue](https://github.com/mikegrundvig/frc-paddock/issues): we'll help you get set up and
 work with you to add what your team needs.
 
