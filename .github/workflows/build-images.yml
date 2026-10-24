@@ -81,7 +81,7 @@ jobs:
       - name: Say why it failed
         if: failure()
         run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.plan.outputs.id }}-plan
           path: ${{ env.WORK }}/plan/
@@ -139,7 +139,7 @@ jobs:
       - name: Say why it failed
         if: failure()
         run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.plan.outputs.id }}-image-${{ matrix.image }}
           path: ${{ env.WORK }}/out/
@@ -190,7 +190,7 @@ jobs:
       - name: Say why it failed
         if: failure()
         run: paddock/engine/ci/annotate-failure.sh "${{ github.job }}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.plan.outputs.id }}-computer-${{ matrix.hostname }}
           path: ${{ env.WORK }}/out/
@@ -251,7 +251,7 @@ jobs:
           fi
           paddock/engine/manifest.sh "$WORK/release" "${args[@]}"
           cat "$WORK/release/manifest.json"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.plan.outputs.id }}-release
           path: |
