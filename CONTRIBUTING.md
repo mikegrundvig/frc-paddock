@@ -53,7 +53,10 @@ A flaky test is a bug: fix the cause before anything else.
 - Checks report every problem at once instead of stopping at the first.
 - `engine/` doesn't know about any particular distribution, application, or team. That belongs in
   an adapter, or in a team's steps.
-- Anything downloaded is pinned and checked: tools by version and SHA-256, actions by commit.
+- Anything downloaded is pinned and checked: tools by version and SHA-256, actions by commit, and
+  Gradle's dependencies against `gradle/verification-metadata.xml`. After changing a version in
+  `gradle/libs.versions.toml`, write it again with `./gradlew --write-verification-metadata sha256
+  ci` and check the new entries are the versions you meant.
 - shellcheck passes with no exceptions beyond `.shellcheckrc`; Java is google-java-format
   (`./gradlew spotlessApply`).
 
