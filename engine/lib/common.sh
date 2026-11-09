@@ -200,12 +200,13 @@ put_in() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# Loop devices (build-image.sh, stamp-image.sh).
+# Loop devices (build-image.sh, inspect-image.sh, stamp-image.sh).
 # ---------------------------------------------------------------------------------------------
-# Attaches an image file with its partitions; prints the loop device.
+# Attaches an image file with its partitions (read-only, given "read-only"); prints the loop device.
 attach_image() {
-  local loop
-  loop=$(losetup --find --show --partscan "$1") ||
+  local loop options=(--find --show --partscan)
+  [[ ${2:-} != read-only ]] || options+=(--read-only)
+  loop=$(losetup "${options[@]}" "$1") ||
     die "couldn't attach $1 to a loop device: run as root, in a container only if it's privileged with this machine's /dev (--privileged -v /dev:/dev)"
   udevadm settle 2>/dev/null || true
   printf '%s' "$loop"
@@ -219,6 +220,48 @@ wait_for_device() {
     sleep 0.1
   done
   die "$1 didn't appear"
+}
+
+# mount_by_fstab IMAGE MNT LOOP ROOT_DEV [read-only]: mounts the image's other partitions (a boot
+# partition, its data partition) where its /etc/fstab says, by UUID=, PARTUUID=, PARTLABEL= or
+# LABEL=. Read-only (inspect-image.sh), it makes no mount point and mounts nothing writable.
+mount_by_fstab() {
+  local image=$1 mnt=$2 loop=$3 root_dev=$4 mode=${5:-} source point type key value matched dev probed
+  local options=()
+  [[ $mode != read-only ]] || options=(-o ro)
+  [[ -f $mnt/etc/fstab ]] || return 0
+  while read -r source point type _; do
+    [[ $source =~ ^(PARTUUID|PARTLABEL|UUID|LABEL)=(.+)$ ]] || continue
+    [[ $point == /* && $point != / && $type != swap ]] || continue
+    key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
+    # blkid's low-level probe calls the partition table's names PART_ENTRY_*.
+    case $key in
+      PARTUUID) key=PART_ENTRY_UUID ;;
+      PARTLABEL) key=PART_ENTRY_NAME ;;
+    esac
+    [[ $point =~ ^(/[A-Za-z0-9._@+-]+)+$ && ! $point =~ /\.\.?(/|$) ]] ||
+      die "$image's fstab mounts something at '$point', which isn't a plain path"
+    matched=no
+    for dev in "$loop"p*; do
+      [[ $dev != "$root_dev" ]] || continue
+      probed=$(blkid -p -o value -s "$key" "$dev" 2>/dev/null || true)
+      # UUIDs in either case; labels exactly.
+      if [[ $key == *UUID ]]; then
+        probed=${probed,,} value=${value,,}
+      fi
+      if [[ -n $probed && $probed == "$value" ]]; then
+        say "mounting ${dev##*/} at $point, as the image's fstab does"
+        if [[ $mode != read-only ]]; then
+          mkdir -p "$mnt$point"
+        fi
+        [[ ! -L $mnt$point ]] || die "$image's fstab mount point $point is a link"
+        [[ -d $mnt$point ]] || die "$image's fstab mounts a partition at $point, which isn't a folder in the image"
+        mount "${options[@]}" "$dev" "$mnt$point"
+        matched=yes
+      fi
+    done
+    [[ $matched == yes ]] || say "warning: $image's fstab mounts $source at $point, which is none of its partitions; steps that write there write into the root"
+  done < <(grep -Ev '^[[:space:]]*(#|$)' "$mnt/etc/fstab")
 }
 
 # The number of partitions in an image file's table.
@@ -466,6 +509,12 @@ check_image() {
     '!!null') ;;
     *) cfg_problem "$what.steps must be a list of steps" ;;
   esac
+}
+
+# A unit's name as systemd writes one: foo.service, getty@.service, getty@tty1.service.
+is_unit_name() {
+  local re='^[-A-Za-z0-9:_.\\]+(@[-A-Za-z0-9:_.\\]*)?\.(service|socket|timer|path|mount|automount|swap|target|slice)$'
+  [[ $1 =~ $re ]]
 }
 
 # A file of paddock.yaml's folder, named at a path: WHAT's problem if it isn't one.

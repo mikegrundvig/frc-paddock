@@ -32,7 +32,23 @@ git remote add origin https://github.com/team/robot-images.git
 git add --all
 git -c user.name=test -c user.email=test@localhost commit --quiet --message team
 
-/paddock/engine/local-build.sh --team /team --release images-test --out /out
+/paddock/engine/local-build.sh --team /team --release images-test --out /out 2>&1 | tee /out/build.log
+
+# --- The same repository with a step that fails, inside the chroot: the build leaves nothing behind
+# (no partial image, no kept paths, no DNS copy in /tmp). ---
+cp -a /team /team-broken
+cd /team-broken
+printf '#!/bin/sh\necho "a step that fails" >&2\nexit 1\n' >setup/mark.sh
+git config --global --add safe.directory /team-broken
+git -c user.name=test -c user.email=test@localhost commit --quiet --all --message broken
+if /paddock/engine/local-build.sh --team /team-broken --release images-broken --out /out-broken >/out/broken.log 2>&1; then
+  echo "the broken build passed" >&2
+  exit 1
+fi
+{
+  find /out-broken -maxdepth 1 \( -name '*.img' -o -name '*.keep' \)
+  find /tmp -maxdepth 1 -type f
+} >/out/leftovers.txt
 
 # --- The computer's drive, a partition at a time. ---
 xz -dc /out/release/vision-front-images-test.img.xz | dd of=/out/drive.img bs=4M iflag=fullblock conv=sparse status=none

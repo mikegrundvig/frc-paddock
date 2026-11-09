@@ -14,7 +14,8 @@
 # What the build runs (the base's programs, packages' scripts, the team's) runs as root with this
 # machine's devices: the container is for the mounts, not isolation. Another architecture needs
 # qemu-user-static registered with binfmt_misc's "F" flag. Needs curl, xz, gzip, sfdisk, losetup,
-# blkid, mount, chroot, fstrim, e2fsprogs, git, and mikefarah's yq v4.
+# blkid, mount, chroot, fstrim, e2fsprogs, git, mikefarah's yq v4, and for a systemd image's
+# inspection, systemd-analyze, systemctl and systemd's fstab generator.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -69,6 +70,7 @@ for dir in "$plan"/images/*/; do
   run "$here/fetch.sh" --plan "$plan" --image "$image" --out "$out/inputs-$image"
   run "$here/build-image.sh" --plan "$plan" --image "$image" --config-dir "$config_dir" \
     --inputs "$out/inputs-$image" --out "$out/$image.img"
+  run "$here/inspect-image.sh" --plan "$plan" --image "$image" "$out/$image.img"
 done
 
 rm -rf "$out/release"

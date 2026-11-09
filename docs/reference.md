@@ -66,6 +66,26 @@ A kept path has to be a folder (or not exist yet). It can't be in the default RA
 `ram:`, be under `/data`, or hide a file stamping writes. It can sit under a RAM path
 (`/var/log/journal` under `/var/log`): `/etc/fstab` mounts each path after its parent.
 
+### The inspection
+
+Every image is inspected after it's built, before any computer is stamped from it. It's mounted
+read-only as its computers will boot it (its other partitions where its fstab says, and on a
+read-only root the kept paths), and these must pass, or the build fails naming each problem:
+
+- every file a `file` or `download` step put in place is there at its `to:`, with the step's
+  `mode` (a later step's, when two write one path). A `run` step that removes or changes one fails
+  this;
+- every unit file and drop-in in `/etc/systemd/system` passes `systemd-analyze verify` (its
+  programs are there and runnable, and it names no key or section systemd doesn't know), and a
+  drop-in is for a unit the image has;
+- every unit the image masks is one it has, so `systemctl mask` with a misspelt name fails. Mask
+  only units your base has;
+- `/etc/fstab` passes systemd's fstab generator without a complaint;
+- if the image has `/usr/sbin/sshd`, `sshd -t` takes its configuration.
+
+The checks run on the build machine, from outside the image (its systemd is GitHub's runner's:
+Ubuntu 24.04's), except `sshd -t`, which is the image's own.
+
 ### `computers`
 
 | Key | Default | What |
@@ -149,7 +169,8 @@ keys.
 | `release` | none | The release to publish: lowercase letters, digits, `.`, `_`, `-`, up to 64. Empty means build only |
 
 Its jobs are **Check the input** (all of it, before anything downloads), **Image NAME** for each
-image on a runner of its architecture, **Stamp HOSTNAME** for each computer, and **Release**. If a
+image on a runner of its architecture (built, then inspected: see *The inspection*), **Stamp HOSTNAME** for
+each computer, and **Release**. If a
 job fails, its summary ends with the last lines of its log, plus the disk and mounts. Paddock's
 scripts are checked out at the same commit as the workflow, so the version after `@` decides
 everything that runs.

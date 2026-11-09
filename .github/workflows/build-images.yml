@@ -1,8 +1,8 @@
 name: Build images
 
 # Paddock's image workflow, which a team's repository calls (docs/getting-started.md). It builds each
-# image in the team's paddock.yaml, stamps a copy per computer, and, given a release name, publishes
-# them as a release of the team's repository. The engine is checked out at this workflow's own
+# image in the team's paddock.yaml, inspects it, stamps a copy per computer, and, given a release
+# name, publishes them as a release of the team's repository. The engine is checked out at this workflow's own
 # commit, so pinning the workflow pins everything that runs.
 on:
   workflow_call:
@@ -128,6 +128,14 @@ jobs:
           exec > >(tee -a "$WORK/job.log") 2>&1
           sudo paddock/engine/build-image.sh --plan "$WORK/plan" --image "$IMAGE" \
             --config-dir "team/$(dirname "$CONFIG")" --inputs "$WORK/inputs" --out "$WORK/$IMAGE.img"
+      # Before any computer is stamped from it or it's released: the files its steps put in place
+      # are there, and its configuration passes its init's checks and sshd's.
+      - name: Inspect the image
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          exec > >(tee -a "$WORK/job.log") 2>&1
+          sudo paddock/engine/inspect-image.sh --plan "$WORK/plan" --image "$IMAGE" "$WORK/$IMAGE.img"
       - name: Pack the image
         env:
           IMAGE: ${{ matrix.image }}

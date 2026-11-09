@@ -6,7 +6,7 @@ image's `os:` picks one adapter per axis; the defaults are the only ones so far.
 | Axis | Adapter | Defines |
 |---|---|---|
 | `packages` | `packages/apt.sh` | `packages_check_base ROOT`, `packages_prepare ROOT`, `packages_install ROOT OFFLINE FILE...`, `packages_finish ROOT` |
-| `init` | `init/systemd.sh` | `init_check_base ROOT`, `init_stamped_paths`, `init_ram_paths`, `init_clear_machine_id ROOT`, `init_write_machine_id ROOT ID` |
+| `init` | `init/systemd.sh` | `init_check_base ROOT`, `init_stamped_paths`, `init_ram_paths`, `init_clear_machine_id ROOT`, `init_write_machine_id ROOT ID`, `init_inspect_tools`, `init_inspect ROOT` |
 | `network` | `network/networkmanager.sh` | `network_check_base ROOT`, `network_check_result ROOT`, `network_stamped_paths`, `network_ram_paths`, `network_write ROOT HOSTNAME ADDRESS PREFIX GATEWAY DNS SEED` |
 | `filesystem` | `filesystem/ext4.sh` | `fs_check_base DEVICE`, `fs_grow DEVICE`, `fs_trim MOUNT`, `fs_check DEVICE`, `fs_type`, `fs_data_options`, `fs_make IMAGE OFFSET SIZE_KIB LABEL [DIR]` |
 
@@ -20,6 +20,9 @@ image's `os:` picks one adapter per axis; the defaults are the only ones so far.
 - **`*_stamped_paths`** are the files stamping writes per computer; **`*_ram_paths`**, what the
   adapter's program writes while the computer runs, in RAM on a read-only root. The input check
   keeps steps and kept paths off both.
+- **`init_inspect*`** check a built root from outside it (inspect-root.sh), printing problems as
+  the checks do: `init_inspect_tools` what the build machine lacks to inspect, and `init_inspect`
+  what any image's configuration must pass.
 - **Filesystem functions** run on the build machine, never in the chroot. **`network_write`** and
   **`init_write_machine_id`** write from outside the image, so they write through `put_in`, which
   follows no links.

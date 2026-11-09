@@ -14,6 +14,7 @@ Gradle or Java.
 | `engine/plan.sh` | Checks `paddock.yaml` (`lib/common.sh`'s `check_config`) and writes the plan the later jobs follow |
 | `engine/fetch.sh` | Downloads an image's base, packages, and downloads, each checked |
 | `engine/build-image.sh` | Builds an image: unpacks and grows the base, runs `run-steps.sh` and `finish-root.sh` in a chroot, then `layout.sh` |
+| `engine/inspect-image.sh`, `inspect-root.sh` | Checks a built image before it's stamped: the files its steps put in place, and its init's and sshd's checks |
 | `engine/stamp-image.sh`, `stamp.sh` | Stamps a computer's copy |
 | `engine/manifest.sh`, `release.sh` | Writes `SHA256SUMS` and `manifest.json`, and publishes the release |
 | `engine/local-build.sh` | All of it on one Linux machine |

@@ -134,37 +134,7 @@ case $(od -An -t u2 -j 18 -N 2 "$bash_bin" 2>/dev/null | tr -d ' ') in
   *) base_arch=unknown ;;
 esac
 [[ $base_arch == "$ARCH" ]] || die "$image's base is $base_arch, but from.arch says $ARCH"
-if [[ -f $mnt/etc/fstab ]]; then
-  while read -r source point type _; do
-    [[ $source =~ ^(PARTUUID|PARTLABEL|UUID|LABEL)=(.+)$ ]] || continue
-    [[ $point == /* && $point != / && $type != swap ]] || continue
-    key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
-    # blkid's low-level probe calls the partition table's names PART_ENTRY_*.
-    case $key in
-      PARTUUID) key=PART_ENTRY_UUID ;;
-      PARTLABEL) key=PART_ENTRY_NAME ;;
-    esac
-    [[ $point =~ ^(/[A-Za-z0-9._@+-]+)+$ && ! $point =~ /\.\.?(/|$) ]] ||
-      die "$image's fstab mounts something at '$point', which isn't a plain path"
-    matched=no
-    for dev in "$loop"p*; do
-      [[ $dev != "$root_dev" ]] || continue
-      probed=$(blkid -p -o value -s "$key" "$dev" 2>/dev/null || true)
-      # UUIDs in either case; labels exactly.
-      if [[ $key == *UUID ]]; then
-        probed=${probed,,} value=${value,,}
-      fi
-      if [[ -n $probed && $probed == "$value" ]]; then
-        say "mounting ${dev##*/} at $point, as the image's fstab does"
-        mkdir -p "$mnt$point"
-        [[ ! -L $mnt$point ]] || die "$image's fstab mount point $point is a link"
-        mount "$dev" "$mnt$point"
-        matched=yes
-      fi
-    done
-    [[ $matched == yes ]] || say "warning: $image's fstab mounts $source at $point, which is none of its partitions; steps that write there write into the root"
-  done < <(grep -Ev '^[[:space:]]*(#|$)' "$mnt/etc/fstab")
-fi
+mount_by_fstab "$image" "$mnt" "$loop" "$root_dev"
 
 # --- The steps, in a chroot. ---
 mount -t proc proc "$mnt/proc"

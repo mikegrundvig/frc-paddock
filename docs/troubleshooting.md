@@ -58,6 +58,16 @@ base.
 
 **No space left on device**: your steps need more room than `grow:` gives them. Make it bigger.
 
+**"NAME's built root has N problems"**: the image was built, but the inspection (*The inspection*
+in the reference) found something wrong. Each line says what: a file a step put in place that a
+later step removed or changed, a unit `systemd-analyze verify` refuses (a program that isn't there,
+a misspelt key), a drop-in for a unit the image doesn't have, a masked unit the image doesn't have
+(almost always a misspelt name, or a mask for another base's unit), or an fstab line systemd can't
+read. Fix the step that did it.
+
+**"NAME's sshd refuses its configuration (sshd -t)"**: a file in `/etc/ssh` (a drop-in your steps
+add, often) has a line sshd can't read. Its own message follows.
+
 **A warning, "fstab mounts ... which is none of its partitions"**: the base's `/etc/fstab` names a
 partition the image doesn't have, so steps that write under that path write into the root instead.
 

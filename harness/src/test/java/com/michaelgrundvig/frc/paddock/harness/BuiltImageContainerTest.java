@@ -26,8 +26,9 @@ import org.testcontainers.utility.MountableFile;
 /**
  * A drive's image built by local-build.sh from a base like a board's (a boot partition, then the
  * root), read partition by partition: grown, its steps run (one leaving a process behind), its root
- * read-only, the data partition added, the computer stamped and released. It needs a rootful
- * runtime's loop devices: it skips under rootless Podman, and must run in CI.
+ * read-only, the data partition added, inspected, the computer stamped and released; and a build
+ * whose step fails, which leaves nothing behind. It needs a rootful runtime's loop devices: it
+ * skips under rootless Podman, and must run in CI.
  */
 @ContainerTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -83,6 +84,21 @@ class BuiltImageContainerTest {
         .contains("vision-front-images-test.img.xz: OK");
     assertThat(run("yq", "-p", "json", ".computers[0].hostname", "/out/release/manifest.json"))
         .isEqualToIgnoringWhitespace("vision-front");
+  }
+
+  @Test
+  void theImageIsInspectedBeforeItsComputersAreStamped() {
+    String log = run("cat", "/out/build.log");
+    // The file step's file is on the boot partition, mounted as the image's fstab has it.
+    assertThat(log).contains("inspected vision: the 1 file(s) its steps put in place are there");
+    assertThat(log.indexOf("inspected /out/vision.img"))
+        .isLessThan(log.indexOf("vision-front: stamping"));
+  }
+
+  @Test
+  void aFailedBuildLeavesNothingBehind() {
+    assertThat(run("cat", "/out/broken.log")).contains("a step that fails");
+    assertThat(run("cat", "/out/leftovers.txt")).isBlank();
   }
 
   @Test

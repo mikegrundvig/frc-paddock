@@ -110,8 +110,8 @@ final class Images {
 
   /**
    * A machine for local-build.sh, run privileged with this machine's /dev: {@link #networked}'s
-   * files at /rootfs (a base is made from them), local-build.sh's tools with this machine's yq, and
-   * a stand-in curl serving /served's files by name.
+   * files at /rootfs (a base is made from them), local-build.sh's tools (systemd's for the
+   * inspection) with this machine's yq, and a stand-in curl serving /served's files by name.
    */
   static String builder(Path engine, Path yq) {
     Map<String, Object> context = new LinkedHashMap<>();
@@ -139,7 +139,7 @@ final class Images {
         FROM %s
         RUN apt-get update -qq \\
          && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \\
-              e2fsprogs fdisk util-linux mount xz-utils gzip git dpkg procps \\
+              e2fsprogs fdisk util-linux mount xz-utils gzip git dpkg procps systemd \\
          && apt-get clean && rm -rf /var/lib/apt/lists/*
         COPY --from=rootfs / /rootfs
         COPY engine /paddock/engine
