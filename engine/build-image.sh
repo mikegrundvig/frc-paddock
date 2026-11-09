@@ -48,7 +48,7 @@ case $BASE_FORMAT in
 esac
 [[ -f $base ]] || die "no base at $base (fetch.sh downloads it)"
 keep=${out%.img}.keep
-mnt="" loop="" resolv=""
+mnt="" loop="" resolv="" partial=no
 
 # Every process whose root is the chroot (a daemon a step left running): it would hold the image.
 kill_chroot_processes() {
@@ -86,10 +86,25 @@ cleanup() {
     loop=""
   fi
 }
-trap cleanup EXIT
+# On a failure, also what the build was writing: the DNS copy, and the partial image and its kept
+# paths, so nothing at --out looks like a finished build.
+on_exit() {
+  local status=$?
+  cleanup
+  if [[ -n $resolv ]]; then
+    rm -f "$resolv"
+  fi
+  if ((status != 0)) && [[ $partial == yes ]]; then
+    say "the build failed: removing its partial image, $out"
+    rm -f "$out"
+    rm -rf "$keep"
+  fi
+}
+trap on_exit EXIT
 
 # --- The base, unpacked (sparse) and grown. Its root is its last partition. ---
 say "$image: unpacking ${BASE_URL##*/}"
+partial=yes
 "${unpack[@]}" "$base" | dd of="$out" bs=4M iflag=fullblock conv=sparse status=none
 root_partition=$(partition_count "$out")
 ((root_partition > 0)) || die "$image's base has no partition table"
@@ -196,6 +211,7 @@ else
   rm -f "$mnt/etc/resolv.conf.paddock-saved"
 fi
 rm -f "$resolv"
+resolv=""
 
 in_chroot finish-root.sh --keep-out "$RUN_DIR/keep" --root-id "UUID=$(blkid -p -o value -s UUID "$root_dev")"
 kill_chroot_processes
@@ -218,4 +234,5 @@ if [[ $READ_ONLY == yes ]]; then
   fs_check "${loop}p$((root_partition + 1))" || die "$image's data partition has errors after its build"
 fi
 cleanup
+partial=no
 say "built $image: $out"
