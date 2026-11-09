@@ -156,3 +156,35 @@ test_stamp_refuses_a_computers_file_through_a_link() {
   assert_fails "goes through a link (/etc/team)" run_stamp vision-front
   [[ -z $(ls -A "$TMP/elsewhere") ]] || fail "stamping wrote outside the image"
 }
+
+# Every package the image has installed, from its own dpkg database: not one removed but for its
+# settings, and nothing for a root without a database.
+test_stamp_records_every_installed_package() {
+  need dpkg-query
+  setup_stamp
+  mkdir -p "$TMP/root/var/lib/dpkg/info" "$TMP/root/var/lib/dpkg/updates"
+  cat >"$TMP/root/var/lib/dpkg/status" <<'EOF2'
+Package: chrony
+Status: install ok installed
+Architecture: arm64
+Version: 4.6.1-2
+
+Package: oldtool
+Status: deinstall ok config-files
+Architecture: arm64
+Version: 1.0-1
+
+Package: base-files
+Status: install ok installed
+Architecture: arm64
+Version: 13.8+deb13u1
+
+EOF2
+  run_stamp vision-front
+  local stamp=$TMP/vision-front.stamp.json
+  assert_eq "$(yq -p json -o tsv '.installed[] | [.name, .version, .architecture]' "$stamp")" \
+    "$(printf 'base-files\t13.8+deb13u1\tarm64\nchrony\t4.6.1-2\tarm64')"
+  rm -r "$TMP/root/var/lib/dpkg"
+  run_stamp vision-front
+  assert_eq "$(yq -p json -o yaml -r '.installed | length' "$stamp")" 0
+}

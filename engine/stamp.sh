@@ -96,6 +96,16 @@ if [[ -n $stamp_out ]]; then
   for server in $DNS; do
     dns+=("\"$server\"")
   done
+  # Every package the image has installed, as its packages adapter lists them. The names come from
+  # the image, so one that would need escaping in JSON is refused rather than written.
+  installed=()
+  list=$(packages_installed "$root")
+  while IFS=$'\t' read -r name version arch; do
+    [[ -n $name ]] || continue
+    [[ $name$version$arch =~ ^[A-Za-z0-9.+~:_-]+$ ]] ||
+      die "the image's package list has '$name $version $arch', which isn't a package's name, version and architecture"
+    installed+=("$(printf '{"name": "%s", "version": "%s", "architecture": "%s"}' "$name" "$version" "$arch")")
+  done <<<"$list"
   join() {
     local IFS=,
     echo "$*"
@@ -113,6 +123,7 @@ if [[ -n $stamp_out ]]; then
     printf '  "base": {"url": "%s", "sha256": "%s"},\n' "$BASE_URL" "$BASE_SHA256"
     printf '  "packages": [%s],\n' "$(join "${packages[@]}")"
     printf '  "downloads": [%s],\n' "$(join "${downloads[@]}")"
+    printf '  "installed": [%s],\n' "$(join "${installed[@]}")"
     printf '  "files": [%s]\n' "$(join "${own_files[@]}")"
     printf '}\n'
   } | put "$stamp_out" 0644

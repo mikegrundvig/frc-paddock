@@ -182,7 +182,7 @@ one, the release holds:
 |---|---|
 | `<hostname>-<release>.img.xz` | Each computer's image |
 | `SHA256SUMS` | The SHA-256 of every image and the notice |
-| `manifest.json` | The release, its commit and time, and each computer: address, gateway, DNS, image, base, packages and downloads (each by URL and SHA-256), its own files (each by path and SHA-256), file name, and file SHA-256 (`schema: 1`) |
+| `manifest.json` | The release, its commit and time, and each computer: address, gateway, DNS, image, base, packages and downloads (each by URL and SHA-256), every package installed in it (`installed`: name, version and architecture, from its dpkg database), its own files (each by path and SHA-256), file name, and file SHA-256 (`schema: 1`) |
 | your notice | If you have one |
 
 A release is never replaced. Its tag is created at the commit that was built, or, if a tag started

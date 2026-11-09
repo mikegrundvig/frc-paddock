@@ -62,3 +62,13 @@ packages_install() {
       die "${deb##*/} isn't installed at its version, $version"
   done
 }
+
+# Every package installed in an image, a line each: name, version and architecture, tab-separated,
+# from its dpkg database (read from outside it, at stamping). Nothing for a root without one.
+packages_installed() {
+  local root=${1%/}
+  [[ -f $root/var/lib/dpkg/status ]] || return 0
+  command -v dpkg-query >/dev/null || die "needs dpkg-query, to list the image's packages"
+  dpkg-query --admindir="$root/var/lib/dpkg" -W -f='${db:Status-Abbrev}\t${Package}\t${Version}\t${Architecture}\n' |
+    awk -F'\t' -v OFS='\t' '$1 == "ii " { print $2, $3, $4 }' | LC_ALL=C sort
+}
