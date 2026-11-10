@@ -22,6 +22,7 @@ problem at once, including any key it doesn't recognize.
 | `grow` | `1G` | Extra room added to the root for your steps: a size like `512M` or `2G` |
 | `steps` | none | What to add, in order (below) |
 | `read-only` | none | Makes the root read-only (below) |
+| `boot.check` | none | A script from your repository, run in a copy of the image booted after the inspection (*The boot*, below) |
 
 ### Steps
 
@@ -85,6 +86,25 @@ read-only root the kept paths), and these must pass, or the build fails naming e
 
 The checks run on the build machine, from outside the image (its systemd is GitHub's runner's:
 Ubuntu 24.04's), except `sshd -t`, which is the image's own.
+
+### The boot
+
+An image with a `boot.check` is booted after its inspection, before any computer is stamped from
+it. A throwaway copy, stamped as one of its computers (the first by name), boots in a container on
+the build machine (`systemd-nspawn --boot`, on a runner of the image's architecture), with its root
+read-only and, on a read-only root, its data partition at `/data` and the kept paths bound from it,
+as that computer has them. It has no network but its own loopback, and the base's other partitions
+(a boot partition) aren't mounted, since a container's systemd doesn't mount partitions.
+
+Once the image's systemd says its boot has finished (running, or degraded: the units that failed
+are named in the log, since some need the board itself), your script runs inside it with bash, as
+root, with `PADDOCK_IMAGE` set. It exits 0 for an image that's right, and otherwise fails the
+build: say what's wrong on its standard error. The journal's warnings follow a failed check in the
+log. The boot may take up to 5 minutes. The image itself isn't changed.
+
+Check what the computer needs to do its job, as a board would show it: that a service is active and
+stays so (`systemctl show -p ActiveState,SubState,NRestarts`), that a program runs, that a path is
+mounted. Not what needs the board's hardware: there are no cameras, GPIO, or real network.
 
 ### `computers`
 
@@ -169,7 +189,8 @@ keys.
 | `release` | none | The release to publish: lowercase letters, digits, `.`, `_`, `-`, up to 64. Empty means build only |
 
 Its jobs are **Check the input** (all of it, before anything downloads), **Image NAME** for each
-image on a runner of its architecture (built, then inspected: see *The inspection*), **Stamp HOSTNAME** for
+image on a runner of its architecture (built, inspected, and booted if it has a boot check: see
+*The inspection* and *The boot*), **Stamp HOSTNAME** for
 each computer, and **Release**. If a
 job fails, its summary ends with the last lines of its log, plus the disk and mounts. Paddock's
 scripts are checked out at the same commit as the workflow, so the version after `@` decides

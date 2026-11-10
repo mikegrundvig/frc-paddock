@@ -49,6 +49,8 @@ change the repository, run it again, and reflash.
   pulling the power can't wreck the system.
 - Gives each computer its own files on top of the shared image, like its camera's calibration.
 - Labels each image with the release and commit it came from.
+- Checks each image before it's released: the files your steps put in place, its units and SSH
+  settings, and, if you give it a check of your own, a copy of it booted in a container.
 
 ## What it doesn't do (yet)
 

@@ -20,6 +20,9 @@ images:
       data: 512M
       # The journal; SSH's settings and each board's own host keys; pi's home.
       keep: [/var/log/journal, /etc/ssh, /home/pi]
+    # Checked in a copy of the image booted on the build machine, before it's released.
+    boot:
+      check: test/boot.sh
 
 computers:
   - hostname: pi-logger

@@ -57,6 +57,7 @@ keep its path, put it in RAM (`ram:`), or turn it off.
 | `files/journald.conf` | The journal kept on `/data`, written every 10 seconds |
 | `files/swap.conf` | Swap in compressed RAM only |
 | `files/e2fsck.conf` | Lets the boot-time check of `/data` run when the clock is behind |
+| `test/boot.sh` | The boot check: run in a copy of the image booted as each build's last check, it fails the build if the root is writable, a kept path isn't on `/data`, or SSH isn't up |
 | `NOTICE.md` | What's in the image, and where its source is |
 
 ## On the board

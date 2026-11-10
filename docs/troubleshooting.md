@@ -68,6 +68,13 @@ read. Fix the step that did it.
 **"NAME's sshd refuses its configuration (sshd -t)"**: a file in `/etc/ssh` (a drop-in your steps
 add, often) has a line sshd can't read. Its own message follows.
 
+**"NAME's boot check (PATH) failed"**: the image booted in its container, and your check said
+something's wrong, on the lines just above it, followed by the journal's warnings. The units that
+failed in the container are named before the check ran; one that needs the board (a camera, a
+real network) fails there whatever you do, so check only what a container shows (*The boot* in the
+reference). **"NAME didn't finish booting in 300s"** or **"booted into maintenance"**: a unit the
+boot waits for hangs or fails, often a mount; the journal's warnings above name it.
+
 **A warning, "fstab mounts ... which is none of its partitions"**: the base's `/etc/fstab` names a
 partition the image doesn't have, so steps that write under that path write into the root instead.
 

@@ -452,7 +452,7 @@ check_image() {
     cfg_problem "$what must be an image: its from:, and its steps:"
     return
   fi
-  cfg_keys "$p" "from os grow steps read-only" "$what"
+  cfg_keys "$p" "from os grow steps read-only boot" "$what"
 
   if [[ $(cfg_tag "$p.from") != '!!map' ]]; then
     cfg_problem "$what.from must be its base: url and sha256"
@@ -509,6 +509,19 @@ check_image() {
     '!!null') ;;
     *) cfg_problem "$what.steps must be a list of steps" ;;
   esac
+
+  case $(cfg_tag "$p.boot") in
+    '!!map')
+      cfg_keys "$p.boot" "check" "$what.boot"
+      if [[ $(cfg_tag "$p.boot.check") == '!!null' ]]; then
+        cfg_problem "$what.boot.check is required: the script run in the booted image"
+      else
+        cfg_repo_script "$p.boot.check" "$what.boot.check"
+      fi
+      ;;
+    '!!null') ;;
+    *) cfg_problem "$what.boot must give its check: the script run in the booted image" ;;
+  esac
 }
 
 # A unit's name as systemd writes one: foo.service, getty@.service, getty@tty1.service.
@@ -525,6 +538,17 @@ cfg_repo_file() {
     cfg_problem "$2: '$path' isn't a path from paddock.yaml's folder (no leading '/', no '..')"
   elif ! cfg_file "$path"; then
     cfg_problem "$2: $path isn't a file in paddock.yaml's folder (names are case-sensitive)"
+  fi
+}
+
+# A script of paddock.yaml's folder, at a path, that bash can run: WHAT's problem if it isn't one.
+cfg_repo_script() {
+  local before=${#PROBLEMS[@]} path
+  cfg_repo_file "$1" "$2"
+  ((${#PROBLEMS[@]} == before)) || return 0
+  path=$(cfg_scalar "$1")
+  if grep -q $'\r' "$CFG_DIR/$path"; then
+    cfg_problem "$2: $path has Windows line endings (CRLF), which bash can't run: save it with LF"
   fi
 }
 
@@ -601,14 +625,7 @@ check_steps() {
         ;;
       run)
         cfg_keys "$s" "run" "$sw"
-        path=$(cfg_scalar "$s.run")
-        if ! is_relative_path "$path"; then
-          cfg_problem "$sw: '$path' isn't a path from paddock.yaml's folder (no leading '/', no '..')"
-        elif ! cfg_file "$path"; then
-          cfg_problem "$sw: $path isn't a file in paddock.yaml's folder (names are case-sensitive)"
-        elif grep -q $'\r' "$CFG_DIR/$path"; then
-          cfg_problem "$sw: $path has Windows line endings (CRLF), which bash can't run: save it with LF"
-        fi
+        cfg_repo_script "$s.run" "$sw"
         ;;
       *)
         cfg_problem "$sw must be exactly one of file:, download:, package:, or run:"

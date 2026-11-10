@@ -12,7 +12,8 @@
 #   plan.env                RELEASE, PUBLISH (yes|no), COMMIT, BUILT_AT, REPOSITORY
 #   images/NAME/image.env   IMAGE, BASE_URL, BASE_SHA256, BASE_FORMAT (xz|gz|img), ARCH, GROW_MB,
 #                           OS_PACKAGES, OS_INIT, OS_NETWORK, OS_FILESYSTEM, READ_ONLY (yes|no),
-#                           DATA_MB, KEEP and RAM (space-separated paths)
+#                           DATA_MB, KEEP and RAM (space-separated paths), BOOT_CHECK (a path
+#                           from paddock.yaml's folder, or empty)
 #   images/NAME/steps.list  a step a line, tab-separated: file PATH TO MODE | download SHA256 URL TO
 #                           MODE | package SHA256 URL | run PATH
 #   computers/HOST.env      COMPUTER, COMPUTER_IMAGE, ADDRESS, PREFIX, GATEWAY, DNS
@@ -177,6 +178,7 @@ while IFS= read -r name; do
     printf 'DATA_MB=%q\n' "$data_mb"
     printf 'KEEP=%q\n' "$keep"
     printf 'RAM=%q\n' "$ram"
+    printf 'BOOT_CHECK=%q\n' "$(get .boot.check)"
   } >"$dir_out/image.env"
   # A step at a time: yq groups a whole list's matches by expression, not by item.
   steps=$(yq -r "($p.steps // []) | length" "$config")

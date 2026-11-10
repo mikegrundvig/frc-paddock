@@ -378,3 +378,31 @@ test_config_lets_a_writable_images_computer_put_files_anywhere_but_stamped_paths
   edit_team '.computers[2].files = "computers/bench.conf"'
   assert_fails "bench's files must be a list" check
 }
+
+# Each row: an image's boot check, as an edit of the team's input, and what the check must say
+# ("passes" for one it must take).
+test_config_checks_an_images_boot_check() {
+  local base=$TMP rows what change text n=0
+  rows=$(
+    cat <<'ROWS'
+a script of the team's	edit_team '.images.vision.boot.check = "setup/check.sh"'	passes
+a script that isn't there	edit_team '.images.vision.boot.check = "test/boot.sh"'	images.vision.boot.check: test/boot.sh isn't a file in paddock.yaml's folder
+a path outside the folder	edit_team '.images.vision.boot.check = "/usr/bin/true"'	images.vision.boot.check: '/usr/bin/true' isn't a path from paddock.yaml's folder
+a script with Windows line endings	edit_team '.images.vision.boot.check = "setup/check.sh"'; printf '#!/bin/sh\r\ntrue\r\n' >"$TMP/team/setup/check.sh"	images.vision.boot.check: setup/check.sh has Windows line endings (CRLF)
+no check	edit_team '.images.vision.boot = {}'	images.vision.boot.check is required
+a key it doesn't take	edit_team '.images.vision.boot = {"check": "setup/check.sh", "timeout": 60}'	images.vision.boot: unknown key 'timeout'
+not a map	edit_team '.images.vision.boot = "setup/check.sh"'	images.vision.boot must give its check
+ROWS
+  )
+  while IFS=$'\t' read -r what change text; do
+    TMP=$base/$((++n))
+    mkdir -p "$TMP"
+    setup_config
+    eval "$change"
+    if [[ $text == passes ]]; then
+      check || fail "$what: the check refused it"
+      continue
+    fi
+    assert_fails "$text" check
+  done <<<"$rows"
+}

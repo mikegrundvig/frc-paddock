@@ -1,7 +1,8 @@
 name: Build images
 
 # Paddock's image workflow, which a team's repository calls (docs/getting-started.md). It builds each
-# image in the team's paddock.yaml, inspects it, stamps a copy per computer, and, given a release
+# image in the team's paddock.yaml, inspects it, boots it if it has a boot check, stamps a copy per
+# computer, and, given a release
 # name, publishes them as a release of the team's repository. The engine is checked out at this workflow's own
 # commit, so pinning the workflow pins everything that runs.
 on:
@@ -136,6 +137,21 @@ jobs:
         run: |
           exec > >(tee -a "$WORK/job.log") 2>&1
           sudo paddock/engine/inspect-image.sh --plan "$WORK/plan" --image "$IMAGE" "$WORK/$IMAGE.img"
+      # Then, if paddock.yaml gives the image a boot check, a copy of it boots in a container on this
+      # runner (of the image's architecture), and the check runs in it once the boot has finished.
+      - name: Boot the image
+        env:
+          IMAGE: ${{ matrix.image }}
+          CONFIG: ${{ inputs.config }}
+        run: |
+          exec > >(tee -a "$WORK/job.log") 2>&1
+          # systemd-nspawn and machinectl, only for an image that boots.
+          if (. "$WORK/plan/images/$IMAGE/image.env" && [[ -n $BOOT_CHECK ]]); then
+            sudo apt-get update --quiet
+            sudo apt-get install --yes --quiet --no-install-recommends systemd-container
+          fi
+          sudo paddock/engine/boot-image.sh --plan "$WORK/plan" --image "$IMAGE" \
+            --config-dir "team/$(dirname "$CONFIG")" "$WORK/$IMAGE.img"
       - name: Pack the image
         env:
           IMAGE: ${{ matrix.image }}

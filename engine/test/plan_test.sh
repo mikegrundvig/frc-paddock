@@ -28,6 +28,7 @@ test_plan_writes_each_image() {
     assert_eq "$KEEP" "/var/lib/team /var/log/journal"
     # The defaults, and the adapters' own.
     assert_eq "$RAM" "/tmp /var/tmp /var/log /var/lib/systemd /var/lib/NetworkManager"
+    assert_eq "$BOOT_CHECK" "" "no boot check"
   )
   (
     . "$TMP/plan/images/plain/image.env"
@@ -205,4 +206,14 @@ test_plan_copies_each_computers_own_files() {
   assert_eq "$(cat "$own/00")" 'fx: 600.0'
   assert_eq "$(cat "$own/01")" 'id: front'
   assert_no_file "$TMP/plan/computers/vision-back.files"
+}
+
+test_plan_writes_the_images_boot_check() {
+  setup_plan
+  edit_team '.images.vision.boot.check = "setup/check.sh"'
+  make_plan
+  (
+    . "$TMP/plan/images/vision/image.env"
+    assert_eq "$BOOT_CHECK" setup/check.sh
+  )
 }

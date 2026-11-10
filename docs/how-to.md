@@ -198,8 +198,10 @@ version may mean changes to `paddock.yaml`. If you'd rather pin an exact commit 
 
 ## Build on your own Linux machine
 
-`engine/local-build.sh` does what the workflow does, without publishing anything. It needs root in
-a privileged container with the machine's `/dev`, since it mounts images:
+`engine/local-build.sh` does what the workflow does, without publishing anything and without the
+boot check (*The boot* in the reference), which needs systemd-nspawn on a machine of the image's
+architecture. It needs root in a privileged container with the machine's `/dev`, since it mounts
+images:
 
 ```
 git clone https://github.com/mikegrundvig/frc-paddock.git
