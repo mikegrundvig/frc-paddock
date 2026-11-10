@@ -179,8 +179,9 @@ keys.
 
 ## The workflow
 
-`mikegrundvig/frc-paddock/.github/workflows/build-images.yml@VERSION`, called from a job with
-`permissions: contents: write`.
+`mikegrundvig/frc-paddock/.github/workflows/build-images.yml@COMMIT # VERSION`, called from a job
+with `permissions: contents: write`. `COMMIT` is the full SHA of the release's commit, with its
+version beside it as a comment: a tag can be moved, a commit can't.
 
 | Input | Default | What |
 |---|---|---|

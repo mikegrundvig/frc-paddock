@@ -97,15 +97,17 @@ on:
         default: ""
 jobs:
   images:
-    uses: mikegrundvig/frc-paddock/.github/workflows/build-images.yml@v1.0.0
+    uses: mikegrundvig/frc-paddock/.github/workflows/build-images.yml@29800ce7f70e97208f4163264e3396073c267236 # v1.0.0
     permissions:
       contents: write
     with:
       release: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release }}
 ```
 
-This is the only place Paddock shows up in your repository. `@v1.0.0` pins the version, so
-your images only change when your repository does.
+This is the only place Paddock shows up in your repository. The commit after `@` pins the
+version, with its name beside it, so your images only change when your repository does: a tag can
+be moved, and a commit can't. Each [release](https://github.com/mikegrundvig/frc-paddock/releases)
+names its commit.
 
 ## 6. Build and release
 

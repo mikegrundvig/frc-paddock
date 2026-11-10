@@ -72,5 +72,5 @@ needs to change.
 
 1. `./gradlew ci` passes, and CI on `main` (the examples, and the release rehearsal) is green.
 2. The hardware checklist passes on the examples' boards.
-3. Tag `vMAJOR.MINOR.PATCH` on `main` and push it. Teams pin it in
-   their workflow's `@`.
+3. Tag `vMAJOR.MINOR.PATCH` on `main` and push it. Teams pin its commit in their workflow's `@`,
+   with the tag beside it as a comment.

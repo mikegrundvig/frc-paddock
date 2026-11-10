@@ -192,9 +192,10 @@ on GitHub's ARM runners). Only people with access to the repository can download
 
 ## Upgrade Paddock
 
-Change `@v1.0.0` in your workflow to the new version and read its release notes: a new major
-version may mean changes to `paddock.yaml`. If you'd rather pin an exact commit than a tag, use
-`@<full commit SHA>`.
+Change the commit after `@` in your workflow to the new release's (its full SHA, from its
+[release](https://github.com/mikegrundvig/frc-paddock/releases)), and the version beside it, then
+read its release notes: a new major version may mean changes to `paddock.yaml`. A commit, unlike a
+tag, can't be moved, so your images change only when you change it.
 
 ## Build on your own Linux machine
 
