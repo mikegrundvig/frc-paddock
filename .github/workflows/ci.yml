@@ -55,7 +55,7 @@ jobs:
           tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP" --strip-components=1 shellcheck-v0.11.0/shellcheck
           mv "$RUNNER_TEMP/shellcheck" "$RUNNER_TEMP/bin/"
           echo "$RUNNER_TEMP/bin" >>"$GITHUB_PATH"
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # The open-source cache, not the default commercial one.
           cache-provider: basic
