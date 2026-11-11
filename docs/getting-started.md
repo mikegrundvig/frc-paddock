@@ -97,7 +97,7 @@ on:
         default: ""
 jobs:
   images:
-    uses: mikegrundvig/frc-paddock/.github/workflows/build-images.yml@29800ce7f70e97208f4163264e3396073c267236 # v1.0.0
+    uses: mikegrundvig/frc-paddock/.github/workflows/build-images.yml@9f3c96899870b37c3bfe321c5c6ecbdcf849e6f8 # v1.1.0
     permissions:
       contents: write
     with:
