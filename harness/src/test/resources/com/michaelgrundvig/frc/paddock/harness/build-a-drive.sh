@@ -32,6 +32,9 @@ git remote add origin https://github.com/team/robot-images.git
 git add --all
 git -c user.name=test -c user.email=test@localhost commit --quiet --message team
 
+# The build's log is kept for the test to read. tee opens it as the pipeline starts, before
+# local-build.sh has made /out, so /out is made first: without it tee fails and the script with it.
+mkdir -p /out
 /paddock/engine/local-build.sh --team /team --release images-test --out /out 2>&1 | tee /out/build.log
 
 # --- The same repository with a step that fails, inside the chroot: the build leaves nothing behind
