@@ -30,20 +30,19 @@ final class Computer extends GenericContainer<Computer> {
     boolean podman = ContainerRuntime.podman();
     withLabel(ContainerRuntime.LABEL, ContainerRuntime.OWNER);
     withTmpFs(TMPFS);
-    withCreateContainerCmdModifier(
-        cmd -> {
-          cmd.withHostName(hostname);
-          HostConfig host = cmd.getHostConfig();
-          if (host == null) {
-            return;
-          }
-          if (podman) {
-            host.withCapAdd(Capability.SYS_ADMIN, Capability.NET_ADMIN)
-                .withSecurityOpts(List.of("label=disable"));
-          } else {
-            host.withPrivileged(true);
-          }
-        });
+    withCreateContainerCmdModifier(cmd -> {
+      cmd.withHostName(hostname);
+      HostConfig host = cmd.getHostConfig();
+      if (host == null) {
+        return;
+      }
+      if (podman) {
+        host.withCapAdd(Capability.SYS_ADMIN, Capability.NET_ADMIN)
+            .withSecurityOpts(List.of("label=disable"));
+      } else {
+        host.withPrivileged(true);
+      }
+    });
     // Started once systemd has booted it: every unit started, or failed.
     waitingFor(
         Wait.forSuccessfulCommand(
@@ -54,12 +53,11 @@ final class Computer extends GenericContainer<Computer> {
 
   /** Its root read-only, as a read-only image's is on its drive. */
   Computer withReadOnlyRoot() {
-    return withCreateContainerCmdModifier(
-        cmd -> {
-          if (cmd.getHostConfig() != null) {
-            cmd.getHostConfig().withReadonlyRootfs(true);
-          }
-        });
+    return withCreateContainerCmdModifier(cmd -> {
+      if (cmd.getHostConfig() != null) {
+        cmd.getHostConfig().withReadonlyRootfs(true);
+      }
+    });
   }
 
   /** Runs a command as root inside, and answers what it printed; fails if it fails. */

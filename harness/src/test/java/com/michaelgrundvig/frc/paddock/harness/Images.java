@@ -171,14 +171,13 @@ final class Images {
     if (!present) {
       ImageFromDockerfile image =
           new ImageFromDockerfile(name, false).withFileFromString("Dockerfile", dockerfile);
-      context.forEach(
-          (file, content) -> {
-            if (content instanceof Path) {
-              image.withFileFromPath(file, (Path) content);
-            } else {
-              image.withFileFromString(file, (String) content);
-            }
-          });
+      context.forEach((file, content) -> {
+        if (content instanceof Path) {
+          image.withFileFromPath(file, (Path) content);
+        } else {
+          image.withFileFromString(file, (String) content);
+        }
+      });
       image.get();
     }
     BUILT.put(name, name);
